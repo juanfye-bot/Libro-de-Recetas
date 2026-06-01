@@ -1,6 +1,7 @@
 {
   "hosting": {
     "public": ".",
+    "site": "libro-de-recetas-f397c",
     "ignore": [
       "firebase.json",
       ".firebaserc",
