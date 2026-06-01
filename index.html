@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📖 Libro de Recetas</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+:root {
+  --verde: #1a6b3c;
+  --verde-claro: #2d9b5a;
+  --verde-muy-claro: #e8f5ee;
+  --crema: #faf8f2;
+  --gris: #6b7280;
+  --borde: #d1fae5;
+  --rojo: #dc2626;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--crema); color: #1f2937; }
+
+/* LOADING */
+.loading-screen { position: fixed; inset: 0; background: var(--verde); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; color: white; gap: 16px; transition: opacity 0.4s; }
+.loading-screen.hidden { opacity: 0; pointer-events: none; }
+.spinner { width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-screen h2 { font-size: 1.2rem; font-weight: 700; }
+.loading-screen p { font-size: 0.82rem; opacity: 0.75; }
+
+/* SYNC INDICATOR */
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 6px; }
+.sync-dot.syncing { background: #fbbf24; animation: pulse 1s infinite; }
+.sync-dot.error { background: #f87171; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* HEADER */
+header { background: var(--verde); color: white; padding: 20px 16px 14px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.header-left h1 { font-size: 1.35rem; font-weight: 800; display: flex; align-items: center; }
+.header-left p { font-size: 0.73rem; opacity: 0.75; margin-top: 2px; }
+.btn-add-top { background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.5); color: white; border-radius: 10px; padding: 7px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.btn-add-top:active { background: rgba(255,255,255,0.3); }
+.search-box { margin-top: 12px; position: relative; }
+.search-box input { width: 100%; padding: 10px 36px 10px 14px; border-radius: 10px; border: none; font-size: 0.95rem; background: rgba(255,255,255,0.15); color: white; }
+.search-box input::placeholder { color: rgba(255,255,255,0.6); }
+.search-box input:focus { outline: none; background: rgba(255,255,255,0.25); }
+.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); opacity: 0.7; }
+
+/* CATEGORÍAS */
+.cats-wrap { overflow-x: auto; white-space: nowrap; padding: 12px 16px; background: white; border-bottom: 1px solid var(--borde); scrollbar-width: none; }
+.cats-wrap::-webkit-scrollbar { display: none; }
+.cat-btn { display: inline-block; padding: 6px 14px; margin-right: 8px; border-radius: 20px; border: 1.5px solid var(--borde); background: white; color: var(--verde); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.cat-btn.active, .cat-btn:hover { background: var(--verde); color: white; border-color: var(--verde); }
+
+.count-bar { padding: 8px 16px; font-size: 0.78rem; color: var(--gris); }
+
+/* GRID */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px 100px; }
+.card { background: white; border-radius: 14px; overflow: hidden; border: 1px solid var(--borde); cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; }
+.card:active { transform: scale(0.97); }
+.card:hover { box-shadow: 0 4px 12px rgba(26,107,60,0.15); }
+.card-img { width: 100%; height: 90px; background: var(--verde-muy-claro); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; overflow: hidden; }
+.card-img img { width: 100%; height: 90px; object-fit: cover; display: block; }
+.card-body { padding: 10px 12px 12px; }
+.card-title { font-size: 0.85rem; font-weight: 700; color: #1f2937; line-height: 1.3; }
+.card-cat { font-size: 0.7rem; color: var(--verde-claro); font-weight: 600; margin-top: 3px; }
+.card-ing-count { font-size: 0.68rem; color: var(--gris); margin-top: 3px; }
+.no-results { grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--gris); }
+
+/* OVERLAY BASE */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; }
+.overlay.open { display: flex; align-items: flex-end; }
+
+/* MODAL VER */
+.modal { background: white; border-radius: 20px 20px 0 0; width: 100%; max-height: 92vh; overflow-y: auto; padding-bottom: 32px; }
+.modal-header { background: var(--verde); color: white; padding: 18px 16px 14px; border-radius: 20px 20px 0 0; position: sticky; top: 0; z-index: 10; }
+.modal-header-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; }
+.btn-icon { background: rgba(255,255,255,0.2); border: none; color: white; width: 34px; height: 34px; border-radius: 50%; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.modal-recipe-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; display: block; }
+.modal-emoji { font-size: 2.2rem; margin-bottom: 4px; }
+.modal-title { font-size: 1.25rem; font-weight: 800; line-height: 1.2; }
+.modal-cat-tag { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 10px; padding: 2px 10px; font-size: 0.73rem; margin-top: 6px; }
+.modal-body { padding: 18px 16px; }
+.section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--verde); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--borde); }
+.ing-list { list-style: none; margin-bottom: 24px; }
+.ing-list li { padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.87rem; display: flex; gap: 8px; align-items: baseline; }
+.ing-list li:last-child { border-bottom: none; }
+.ing-qty { font-weight: 700; color: var(--verde); min-width: 40px; font-size: 0.83rem; flex-shrink: 0; }
+.steps-list { list-style: none; }
+.steps-list li { padding: 10px 0 10px 36px; border-bottom: 1px solid #f3f4f6; font-size: 0.87rem; position: relative; line-height: 1.5; }
+.steps-list li:last-child { border-bottom: none; }
+.step-num { position: absolute; left: 0; top: 10px; width: 24px; height: 24px; background: var(--verde); color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+/* EDITOR */
+.editor-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 300; }
+.editor-overlay.open { display: flex; align-items: flex-end; }
+.editor-modal { background: white; border-radius: 20px 20px 0 0; width: 100%; max-height: 95vh; overflow-y: auto; padding-bottom: 40px; }
+.editor-header { background: var(--verde); color: white; padding: 18px 16px 14px; border-radius: 20px 20px 0 0; position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; }
+.editor-header h2 { font-size: 1.1rem; font-weight: 800; }
+.editor-body { padding: 20px 16px; }
+.field-group { margin-bottom: 18px; }
+.field-label { font-size: 0.75rem; font-weight: 700; color: var(--verde); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
+.field-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--borde); border-radius: 10px; font-size: 0.9rem; color: #1f2937; background: white; }
+.field-input:focus { outline: none; border-color: var(--verde); }
+select.field-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231a6b3c' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+
+.img-upload-area { border: 2px dashed var(--borde); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; position: relative; }
+.img-upload-area:hover { border-color: var(--verde); background: var(--verde-muy-claro); }
+.img-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.img-preview { width: 100%; max-height: 180px; object-fit: cover; border-radius: 10px; display: block; margin-top: 10px; }
+.img-clear-btn { margin-top: 8px; background: none; border: 1px solid #fca5a5; color: var(--rojo); border-radius: 8px; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; }
+
+.ing-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.ing-row input:first-child { width: 80px; flex-shrink: 0; }
+.ing-row input:last-of-type { flex: 1; }
+.btn-remove { background: none; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0; }
+.btn-remove:hover { color: var(--rojo); }
+.btn-add-row { display: flex; align-items: center; gap: 6px; background: none; border: 1.5px dashed var(--borde); border-radius: 8px; color: var(--verde); font-size: 0.82rem; font-weight: 600; padding: 7px 12px; cursor: pointer; width: 100%; justify-content: center; margin-top: 4px; }
+.btn-add-row:hover { background: var(--verde-muy-claro); }
+
+.step-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+.step-row textarea { flex: 1; padding: 8px 10px; border: 1.5px solid var(--borde); border-radius: 8px; font-size: 0.87rem; resize: vertical; min-height: 56px; font-family: inherit; color: #1f2937; }
+.step-row textarea:focus { outline: none; border-color: var(--verde); }
+.step-idx { width: 24px; height: 24px; background: var(--verde); color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 8px; }
+
+.editor-actions { display: flex; gap: 10px; margin-top: 24px; }
+.btn-save { flex: 1; background: var(--verde); color: white; border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-cancel-edit { flex: 0; background: #f3f4f6; color: #374151; border: none; border-radius: 12px; padding: 14px 18px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+
+/* CONFIRMACIÓN */
+.confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; align-items: center; justify-content: center; padding: 20px; }
+.confirm-overlay.open { display: flex; }
+.confirm-box { background: white; border-radius: 16px; padding: 24px; width: 100%; max-width: 320px; text-align: center; }
+.confirm-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+.confirm-box p { font-size: 0.85rem; color: var(--gris); margin-bottom: 20px; }
+.confirm-actions { display: flex; gap: 10px; }
+.btn-confirm-del { flex: 1; background: var(--rojo); color: white; border: none; border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+.btn-confirm-cancel { flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 10px; padding: 11px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1f2937; color: white; border-radius: 10px; padding: 10px 20px; font-size: 0.85rem; font-weight: 600; z-index: 500; transition: transform 0.3s; white-space: nowrap; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- PANTALLA DE CARGA -->
+<div class="loading-screen" id="loadingScreen">
+  <div style="font-size:3rem">📖</div>
+  <div class="spinner"></div>
+  <h2>Cargando recetas…</h2>
+  <p>Conectando con la nube</p>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-row">
+    <div class="header-left">
+      <h1>📖 Libro de Recetas <span class="sync-dot" id="syncDot" title="Sincronizado"></span></h1>
+      <p id="subtitleCount"></p>
+    </div>
+    <button class="btn-add-top" onclick="openEditor(null)">＋ Añadir</button>
+  </div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Buscar receta o ingrediente…" oninput="filterRecipes()">
+    <span class="search-icon">🔍</span>
+  </div>
+</header>
+
+<div class="cats-wrap" id="catsWrap"></div>
+<div class="count-bar" id="countBar"></div>
+<div class="grid" id="grid"></div>
+
+<!-- MODAL VER -->
+<div class="overlay" id="viewOverlay" onclick="closeViewModal(event)">
+  <div class="modal" id="viewModal">
+    <div class="modal-header">
+      <div class="modal-header-actions">
+        <button class="btn-icon" title="Editar" onclick="editCurrent()">✏️</button>
+        <button class="btn-icon" title="Eliminar" onclick="deleteCurrent()">🗑️</button>
+        <button class="btn-icon" title="Cerrar" onclick="closeViewBtn()">✕</button>
+      </div>
+      <div id="mImg"></div>
+      <div class="modal-emoji" id="mEmoji"></div>
+      <div class="modal-title" id="mTitle"></div>
+      <span class="modal-cat-tag" id="mCat"></span>
+    </div>
+    <div class="modal-body">
+      <div class="section-label">Ingredientes</div>
+      <ul class="ing-list" id="mIngs"></ul>
+      <div class="section-label">Preparación</div>
+      <ol class="steps-list" id="mSteps"></ol>
+    </div>
+  </div>
+</div>
+
+<!-- EDITOR -->
+<div class="editor-overlay" id="editorOverlay">
+  <div class="editor-modal">
+    <div class="editor-header">
+      <h2 id="editorTitle">Nueva Receta</h2>
+      <button class="btn-icon" onclick="closeEditor()">✕</button>
+    </div>
+    <div class="editor-body">
+      <div class="field-group">
+        <label class="field-label">📷 Foto de la receta</label>
+        <div class="img-upload-area">
+          <input type="file" accept="image/*" id="imgFileInput" onchange="handleImageUpload(event)">
+          <div id="imgUploadPlaceholder"><div style="font-size:2rem;margin-bottom:6px">🖼️</div><div style="font-size:0.82rem;color:var(--gris)">Toca para subir una foto</div></div>
+          <img id="imgPreview" class="img-preview" style="display:none">
+        </div>
+        <button class="img-clear-btn" id="imgClearBtn" style="display:none" onclick="clearImage()">✕ Quitar imagen</button>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Emoji</label>
+        <input type="text" class="field-input" id="editEmoji" placeholder="🍽️" maxlength="4">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Nombre de la receta *</label>
+        <input type="text" class="field-input" id="editTitulo" placeholder="Ej: Lentejas con chorizo">
+      </div>
+      <div class="field-group">
+        <label class="field-label">Categoría *</label>
+        <select class="field-input" id="editCat"></select>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Ingredientes</label>
+        <div id="ingsContainer"></div>
+        <button class="btn-add-row" onclick="addIngRow()">＋ Añadir ingrediente</button>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Pasos de preparación</label>
+        <div id="stepsContainer"></div>
+        <button class="btn-add-row" onclick="addStepRow()">＋ Añadir paso</button>
+      </div>
+      <div class="editor-actions">
+        <button class="btn-cancel-edit" onclick="closeEditor()">Cancelar</button>
+        <button class="btn-save" id="btnSave" onclick="saveRecipe()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRMACIÓN -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h3>🗑️ Eliminar receta</h3>
+    <p>¿Seguro que quieres eliminar esta receta? No se puede deshacer.</p>
+    <div class="confirm-actions">
+      <button class="btn-confirm-cancel" onclick="closeConfirm()">Cancelar</button>
+      <button class="btn-confirm-del" onclick="confirmDelete()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── FIREBASE CONFIG ───
+const firebaseConfig = {
+  apiKey: "AIzaSyC6p3ccDHxEuEeolhj-LRyI-23meOBQxz0",
+  authDomain: "libro-de-recetas-f397c.firebaseapp.com",
+  projectId: "libro-de-recetas-f397c",
+  storageBucket: "libro-de-recetas-f397c.firebasestorage.app",
+  messagingSenderId: "646239982290",
+  appId: "1:646239982290:web:fd701ba20e0777cdced30b",
+  measurementId: "G-FKKRDNFZSN"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const colRef = db.collection("recetas");
+
+// ─── CONSTANTES ───
+const CATS = ["Sopas y Cremas","Verduras y Guarniciones","Carnes","Pescados y Mariscos","Arroces","Legumbres","Salsas y Bases","Postres","Otros"];
+const CAT_EMOJI = {"Sopas y Cremas":"🥣","Verduras y Guarniciones":"🥦","Carnes":"🥩","Pescados y Mariscos":"🐟","Arroces":"🍚","Legumbres":"🫘","Salsas y Bases":"🫙","Postres":"🍰","Otros":"🥗"};
+
+// ─── DATOS INICIALES ───
+const RECETAS_INIT = [
+  {titulo:"Puré de Verduras",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1",item:"calabaza"},{qty:"1",item:"espinacas"},{qty:"1",item:"tomate"},{qty:"...",item:"otras verduras al gusto"},{qty:"",item:"sal"}],pasos:["Limpiar y trocear la verdura.","Rehogar la verdura en la olla exprés con un poco de sal.","Añadir agua sin llegar a cubrir.","Cerrar la olla, ponerla en el 2 de la válvula y el fuego al 9 de 9.","Cuando suba la válvula, apagar y retirar del fuego.","Cuando se vaya la presión, abrir y pasar por el chino."]},
+  {titulo:"Habas",cat:"Verduras y Guarniciones",emoji:"🌿",img:"",ingredientes:[{qty:"1-2",item:"bolsa o bote de habas babi"},{qty:"1",item:"patata"},{qty:"1",item:"jamón serrano troceado"},{qty:"1",item:"diente de ajo"},{qty:"",item:"sal y aceite"}],pasos:["Si se usan habas congeladas de bolsa, meterlas con agua, sal y un chorrito de aceite en la olla exprés en el 2 de la válvula y el fuego al 9 de 9, hasta 10 minutos después de que suba la válvula.","Rehogar las habas con las patatas fritas en trozos, el ajo machacado y los trozos de jamón."]},
+  {titulo:"Albóndigas",cat:"Carnes",emoji:"🥩",img:"",ingredientes:[{qty:"1 kg",item:"carne picada"},{qty:"1",item:"huevo"},{qty:"1",item:"trozo de miga de pan de 6-8 cm"},{qty:"1 vaso",item:"harina (para formar las bolas)"},{qty:"2",item:"cebollas"},{qty:"3",item:"zanahorias"},{qty:"2 cdas",item:"tomate"},{qty:"1 vaso",item:"vino blanco"},{qty:"",item:"sal, pimienta y leche"}],pasos:["Mezclar la carne picada, el huevo, la miga de pan, sal y pimienta. La miga mojada en leche.","Poner harina en el fondo de un vaso para hacer las bolas.","Freír las albóndigas en aceite y pasar a una cazuela.","En ese mismo aceite, hacer una salsa española y mezclar con las albóndigas."]},
+  {titulo:"Rollo Julio",cat:"Carnes",emoji:"🍗",img:"",ingredientes:[{qty:"600 g",item:"pechuga de pollo picada"},{qty:"150 g",item:"jamón serrano picado"},{qty:"1",item:"pastilla de caldo de carne"},{qty:"½ bolsa",item:"ciruelas pasas (100 g)"},{qty:"1 copa",item:"coñac"}],pasos:["Precalentar el horno a 200°.","Mezclar todos los ingredientes y extender en papel de aluminio.","Enrollar en forma de cilindro y meter en el horno con aire arriba y abajo durante 20 minutos.","Meter un vaso con agua para que no se seque.","Cuando al pinchar con una varilla salga limpia, sacar del horno.","Se puede comer caliente o meter en nevera y comer frío acompañado de salsa rosa."]},
+  {titulo:"Tarta de Manzana",cat:"Postres",emoji:"🍎",img:"",ingredientes:[{qty:"5",item:"manzanas reineta Chantecker"},{qty:"110 g",item:"mantequilla"},{qty:"220 g",item:"azúcar"},{qty:"1",item:"hojaldre redondo"}],pasos:["Poner la mantequilla y el azúcar en el molde a derretir en el fuego.","Pelar y quitar el corazón a las manzanas, cortándolas en 4 gajos.","Ponerlas en el molde con el corazón hacia arriba.","Dejar hacer unos 20 minutos a fuego medio.","Poner el hojaldre encima. Lo que sobre, doblarlo hacia adentro.","Meterlo en el horno a 180° hasta que esté dorado."]},
+  {titulo:"Porrusalda",cat:"Sopas y Cremas",emoji:"🧅",img:"",ingredientes:[{qty:"5",item:"patatas en trozos grandes"},{qty:"3",item:"puerros en trozos"},{qty:"1",item:"cebolla muy picada"},{qty:"1 trozo",item:"calabaza"},{qty:"",item:"sal"}],pasos:["Sofreír la cebolla.","Echar el resto de verduras y cubrir con agua fría.","Echar sal.","Hervir durante 30 minutos aproximadamente.","Probar las patatas para saber si están hechas."]},
+  {titulo:"Patatas Panadera",cat:"Verduras y Guarniciones",emoji:"🥔",img:"",ingredientes:[{qty:"4",item:"patatas grandes"},{qty:"1",item:"cebolla"},{qty:"",item:"mantequilla, aceite y sal"}],pasos:["Cortar las patatas en rodajas y la cebolla en juliana.","Sofreír con poco aceite en una sartén unos 15 minutos.","Ponerlas en una fuente de horno con mantequilla, tapadas con papel de aluminio.","Meterlas en el horno a 180° durante 30 minutos."]},
+  {titulo:"Tomates al Horno",cat:"Verduras y Guarniciones",emoji:"🍅",img:"",ingredientes:[{qty:"4",item:"tomates cortados por el ecuador"},{qty:"1",item:"ajo picado"},{qty:"",item:"sal, aceite y pan rallado (opcional)"}],pasos:["Cortar los tomates por el medio y poner sal, aceite, ajo picado y pan rallado si se quiere.","Ponerlos en una fuente y meterlos al horno a 180° durante 30 minutos."]},
+  {titulo:"Carrilleras",cat:"Carnes",emoji:"🍷",img:"",ingredientes:[{qty:"15",item:"carrilleras"},{qty:"4",item:"cebollas muy picadas"},{qty:"½",item:"puerro muy picado"},{qty:"1 l",item:"vino tinto"},{qty:"1",item:"pastilla Starlux"},{qty:"1 cda",item:"Bovril colmada"}],pasos:["Freír las carrilleras a fuego fuerte (9) para marcarlas y apartar.","Sofreír la cebolla y el puerro a fuego muy bajo (3/9) durante 25 minutos en la olla exprés sin tapar.","Echar las carrilleras y cubrir con vino tinto. Añadir la pastilla de Starlux y la cucharada de Bovril.","Tapar la olla, poner la válvula en el 2 y el fuego al 9.","Cuando suba, bajar al 4 de 9. En total tenerlo 20 minutos.","Retirar y cuando se vaya la presión, sacar las carrilleras.","Pasar la salsa por la batidora o el chino. Debe quedar caldoso.","Echar las carrilleras y hervir hasta que la salsa engorde a fuego medio (4/9)."]},
+  {titulo:"Quiche de Espinacas y Setas",cat:"Otros",emoji:"🥧",img:"",ingredientes:[{qty:"2 bolsas",item:"espinacas congeladas"},{qty:"4",item:"huevos"},{qty:"2 bandejas",item:"setas pequeñas"},{qty:"2",item:"pasta brisa"},{qty:"1",item:"diente de ajo"}],pasos:["Cocer las espinacas hirviendo unos 2 minutos hasta descongelarlas.","Sofreír las setas con el ajo, que luego se retira.","Batir los huevos y mezclar todo.","Poner la pasta brisa cubriendo los moldes con su papel y legumbres encima para hacer peso. Meter en el horno 10 minutos.","Sacar, retirar las legumbres y rellenar con la mezcla.","Meter en el horno otros 15 minutos hasta que cuaje el huevo."]},
+  {titulo:"Pescado al Horno",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1½",item:"pescado (abierto)"},{qty:"1",item:"cebolla"},{qty:"3",item:"patatas"},{qty:"2",item:"tomates"},{qty:"",item:"aceite y sal"}],pasos:["Cortar la cebolla en juliana y las patatas en rodajas finas.","Freírlo todo en la sartén o en la freidora.","Poner todo de base en una fuente de horno y añadir los tomates en rodajas de un dedo de grosor.","Poner encima el pescado abierto con aceite y sal.","Meter en el horno a 180°, arriba, abajo y aire, unos 15 minutos."]},
+  {titulo:"Sopa de Ajo",cat:"Sopas y Cremas",emoji:"🧄",img:"",ingredientes:[{qty:"5",item:"dientes de ajo"},{qty:"150 g",item:"pan (cortezas)"},{qty:"1½ l",item:"caldo"},{qty:"2",item:"pastillas de caldo de carne"},{qty:"1 cda",item:"pimentón dulce"},{qty:"1",item:"cayena"},{qty:"1",item:"huevo por persona"}],pasos:["Tostar el pan y trocearlo.","Sofreír en una cazuela el ajo hasta dorarlo.","Añadir el pan y sofreír, añadiendo pimentón dulce.","Añadir el caldo y remover con varillas.","Dejar cocer 30 minutos removiendo de vez en cuando.","Antes de servir, con la sopa hirviendo, añadir un huevo por persona.","Nota: con los ajos se puede añadir una cayena."]},
+  {titulo:"Arroz en su Tinta",cat:"Arroces",emoji:"🍚",img:"",ingredientes:[{qty:"3 vasos",item:"arroz"},{qty:"6½ vasos",item:"agua"},{qty:"2",item:"dientes de ajo"},{qty:"1",item:"pastilla de caldo de carne o pescado"}],pasos:["En una cazuela rehogar los ajos.","Añadir el arroz y seguir rehogando un par de minutos.","Calentar el agua con la pastilla de caldo en el microondas.","Añadir el caldo al arroz y echar sal.","No remover y dejar hacer a fuego medio durante 20 minutos exactos.","Retirar y dejar tapado 10 minutos."]},
+  {titulo:"Txipirones en su Tinta",cat:"Pescados y Mariscos",emoji:"🦑",img:"",ingredientes:[{qty:"1 kg",item:"begi-haundi (pota grande) limpio"},{qty:"½ kg",item:"cebollas rojas"},{qty:"½ kg",item:"cebollas blancas"},{qty:"2",item:"dientes de ajo"},{qty:"2 cdas",item:"tomate"},{qty:"",item:"perejil, sal y tinta"}],pasos:["Poner en la olla exprés un fondo de aceite.","Picar las cebollas. Trocear el begihandi en 6 trozos grandes.","Echar en la olla capas alternas de cebolla y begihandi.","Añadir el tomate, los ajos, el perejil y la sal.","Cerrar la olla con la válvula en el 2 y el fuego al máximo (9).","Cuando suba la válvula, bajar al 7 y esperar 1 minuto. Retirar del fuego.","Cuando se pueda abrir, comprobar que el begihandi está hecho.","Sacar los trozos, cortarlos pequeños y reservar.","Retirar el líquido y guardarlo.","Poner la olla sin tapa al 7 y cocinar la cebolla hasta que esté seca.","Pasarla por el pasapurés, poniendo primero la tinta en el fondo.","Añadir el líquido de cocción al gusto para regular el espesor.","Añadir los trozos de begihandi y calentar antes de servir."]},
+  {titulo:"Pollo a la Cerveza",cat:"Carnes",emoji:"🍺",img:"",ingredientes:[{qty:"1",item:"pollo entero"},{qty:"1 lata",item:"cerveza"},{qty:"",item:"sal, pimienta y salsa soja"}],pasos:["Salpimentar el pollo y untar con aceite.","Echar media lata de cerveza.","Meter en el horno 45 minutos a 180° sin grill.","Sacar, dar la vuelta y echar la otra mitad de la cerveza. Otros 45 minutos.","Sacar, dar la vuelta y echar un chorro de soja. Otros 15 minutos.","Sacar, dar la vuelta y echar otro chorro de soja. Otros 15 minutos.","Sacar y servir."]},
+  {titulo:"Ensaladilla Rusa",cat:"Otros",emoji:"🥗",img:"",ingredientes:[{qty:"1",item:"patata mediana por persona"},{qty:"1 lata",item:"bonito (para 4 patatas)"},{qty:"2",item:"zanahorias"},{qty:"2 huevos",item:"para la mayonesa casera"}],pasos:["Cocer las patatas (sin pelar) y las zanahorias (peladas).","Pelar y trocear las patatas en cubitos de 1 cm.","Trocear las zanahorias muy pequeñas.","Mezclar el bonito con las patatas todavía calientes para que absorban bien el aceite y el sabor.","Hacer mayonesa con dos huevos para que salga bastante líquida.","Mezclar todo y refrigerar."]},
+  {titulo:"Lomo con Bovril",cat:"Carnes",emoji:"🐷",img:"",ingredientes:[{qty:"1 kg",item:"lomo de cerdo"},{qty:"1 lata (25 cl)",item:"cerveza"},{qty:"4",item:"dientes de ajo"},{qty:"",item:"Bovril, aceite, sal y pimienta"}],pasos:["Salpimentar el lomo.","Embadurnar el lomo con Bovril.","Ponerlo en una fuente con un chorro de aceite, la cerveza y los 4 dientes de ajo.","Meterlo en el horno 50 minutos a 200°, arriba y abajo, sin aire."]},
+  {titulo:"Gazpacho",cat:"Sopas y Cremas",emoji:"🍅",img:"",ingredientes:[{qty:"1,5 kg",item:"tomates (antes de pelar)"},{qty:"6 cdas",item:"aceite de oliva virgen"},{qty:"3 cdas",item:"vinagre"},{qty:"1 cdta",item:"sal gruesa rasa"},{qty:"50 g",item:"pan de barra"}],pasos:["Meter todo en la trituradora.","Si no se ha pelado antes el tomate, después de triturar, colar."]},
+  {titulo:"Lasaña de Verduras",cat:"Verduras y Guarniciones",emoji:"🫑",img:"",ingredientes:[{qty:"",item:"calabacín"},{qty:"",item:"berenjena"},{qty:"",item:"cebolla dulce"},{qty:"",item:"pimiento verde y rojo"},{qty:"",item:"placas de lasaña (directa al horno)"},{qty:"",item:"nata espesa"},{qty:"",item:"queso rallado"},{qty:"",item:"salsa de tomate frito"}],pasos:["Hacer la verdura en rodajas pequeñas y el calabacín y berenjena en tacos.","Rehogar cebolla y pimientos con un poco de sal, luego añadir el resto y el tomate. Hacer mucho sofrito.","Montar sofrito, luego las placas de lasaña, y al terminar repartir la nata y poner el queso rallado.","Meter directa al horno. Si no se hace al momento, las placas se quedan duras."]},
+  {titulo:"Patatas a la Riojana",cat:"Verduras y Guarniciones",emoji:"🌶️",img:"",ingredientes:[{qty:"4",item:"patatas"},{qty:"1",item:"chorizo fresco"},{qty:"1",item:"pimiento de color"},{qty:"1",item:"pimiento choricero"},{qty:"1",item:"cebolla"},{qty:"10 g",item:"pimentón de la Vera"},{qty:"10 ml",item:"aceite de oliva virgen extra"},{qty:"",item:"sal"}],pasos:["En una cazuela poner aceite y dorar la cebolla en cuadraditos y el pimiento partido.","Añadir el chorizo sin piel en rodajas.","Incorporar las patatas chascadas y el pimentón.","Cubrir con agua y añadir el pimiento choricero.","Cocer a fuego medio unos 40 minutos hasta que las patatas estén tiernas.","Corregir de sal y servir."]},
+  {titulo:"Vainas con Patatas",cat:"Verduras y Guarniciones",emoji:"🫛",img:"",ingredientes:[{qty:"1 kg",item:"vainas (judías verdes)"},{qty:"2",item:"patatas grandes"},{qty:"",item:"agua y sal"}],pasos:["Meter las vainas y las patatas peladas y cortadas por la mitad en la olla exprés. Poner agua hasta cubrir y echar sal.","Poner la olla en el 2 de la válvula y el fuego en el 9 de 9 hasta que suba o suene fuerte.","Dejar otros 2 minutos con el fuego al 5.","Apagar y retirar. Abrir cuando se enfríe, sacando antes toda la presión."]},
+  {titulo:"Salsa Española",cat:"Salsas y Bases",emoji:"🫙",img:"",ingredientes:[{qty:"2",item:"cebollas grandes"},{qty:"1",item:"puerro"},{qty:"1",item:"zanahoria"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"diente de ajo"},{qty:"1 cdta",item:"sal rasa"},{qty:"1 chorro",item:"tomate en salsa"},{qty:"1 copa",item:"coñac"},{qty:"",item:"caldo de carne si hace falta"}],pasos:["Sofreír las cebollas con sal hasta que estén muy doradas.","Añadir el puerro, la zanahoria y el pimiento verde a mitad del proceso.","Añadir una copa de coñac.","Añadir salsa de tomate.","Cuando todo esté hecho, añadir caldo de carne si hace falta y pasar por el pasapurés."]},
+  {titulo:"Arroz con Leche",cat:"Postres",emoji:"🥛",img:"",ingredientes:[{qty:"500 ml",item:"leche fría de nevera"},{qty:"50 g",item:"arroz"},{qty:"40 g",item:"azúcar"},{qty:"2 trozos",item:"piel de limón (solo lo amarillo)"}],pasos:["Poner en un cazo la leche fría, el arroz y los trozos de piel de limón.","Poner el fuego al 5/9 y remover constantemente.","Cuando empieza a hervir, mantener durante 25 minutos.","Cuando vaya espesando, bajar el fuego (primero al 4 y luego al 3).","Al final añadir el azúcar y tener otros 4-5 minutos."]},
+  {titulo:"Salsa de Tomate",cat:"Salsas y Bases",emoji:"🍅",img:"",ingredientes:[{qty:"2 latas (1 kg)",item:"tomate triturado"},{qty:"2",item:"cebollas grandes"},{qty:"1",item:"diente de ajo"},{qty:"1 cdta",item:"sal rasa"},{qty:"1 cda",item:"azúcar colmada"},{qty:"",item:"aceite de oliva"}],pasos:["Poner aceite en la sartén como para freír un filete.","Picar la cebolla y dorarla a fuego lento con sal para que no se queme.","Echar el tomate y dejarlo ½ hora a fuego lento.","Añadir el azúcar.","Pasar por el chino."]},
+  {titulo:"Marmitako",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1 kg",item:"pescado (bonito o atún)"},{qty:"1",item:"cebolla"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"pimiento rojo"},{qty:"1 chorro",item:"salsa de tomate"},{qty:"1",item:"vino blanco"},{qty:"1",item:"diente de ajo"},{qty:"4",item:"patatas grandes"},{qty:"",item:"pimiento choricero y caldo de pescado"}],pasos:["Sofreír la cebolla, los pimientos y el ajo.","Añadir las patatas cortadas en trozos.","Sofreír y añadir pimiento choricero.","Añadir caldo de pescado.","En el último minuto, añadir el pescado en trozos.","Corregir de sal."]},
+  {titulo:"Bechamel",cat:"Salsas y Bases",emoji:"🥛",img:"",ingredientes:[{qty:"2 cdas",item:"harina colmadas"},{qty:"½ l",item:"leche caliente"},{qty:"1 chorro",item:"aceite"},{qty:"",item:"sal"}],pasos:["Freír la harina revolviendo con las varillas.","Echar la leche caliente poco a poco sin dejar de revolver.","Seguir cociendo sin que hierva hasta que tenga el espesor deseado (engordará al enfriarse).","Corregir de sal."]},
+  {titulo:"Lentejas",cat:"Legumbres",emoji:"🫘",img:"",ingredientes:[{qty:"1 vaso",item:"lentejas pardinas"},{qty:"½",item:"pimiento verde"},{qty:"2",item:"zanahorias en trozos grandes"},{qty:"1",item:"cebolla entera"},{qty:"1",item:"puerro"},{qty:"1",item:"patata grande"},{qty:"5 vasos",item:"agua"},{qty:"1 cdta",item:"pimentón dulce (sofrito)"},{qty:"2",item:"dientes de ajo (sofrito)"}],pasos:["Meter todo menos el pimentón y los ajos en la olla exprés con el 2 en la válvula. Cerrar.","Poner el fuego al 9 de 9 y cuando suba la presión, bajar al 5 durante 15 minutos.","Apagar y dejar hasta que se vaya la presión.","Abrir y sacar la verdura (salvo la zanahoria), batirla e incorporarla para engordar el caldo.","Sofrito: sofreír los ajos, quitarlos dorados, apagar el fuego, añadir pimentón dulce y revolver.","Añadir el sofrito a las lentejas y servir."]},
+  {titulo:"Bizcocho de Yogur",cat:"Postres",emoji:"🍋",img:"",ingredientes:[{qty:"1",item:"yogur natural (su vaso es la medida)"},{qty:"1 sobre",item:"levadura Royal"},{qty:"1 medida",item:"aceite de girasol"},{qty:"2 medidas",item:"azúcar"},{qty:"3 medidas",item:"harina"},{qty:"3",item:"huevos"},{qty:"½",item:"zumo de limón y su ralladura"},{qty:"½",item:"zumo de naranja y su ralladura"},{qty:"1 pizca",item:"sal"}],pasos:["Colocar todos los ingredientes en un recipiente y batir con la batidora.","Calentar el horno arriba y abajo a 180°.","Colocar el molde en la parte de abajo del horno (abajo del todo).","No abrir en 30 minutos y tenerlo en total unos 45 minutos."]},
+  {titulo:"Salmorejo",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1 bote (1 kg)",item:"tomate entero pelado"},{qty:"3 rebanadas",item:"pan sin corteza"},{qty:"1",item:"diente de ajo mediano"},{qty:"1 cda",item:"vinagre"},{qty:"1 cdta",item:"sal"},{qty:"100 ml",item:"aceite de oliva"}],pasos:["Triturarlo todo.","Ir corrigiendo de sal, vinagre y aceite al gusto."]},
+  {titulo:"Arroz con Almejas",cat:"Arroces",emoji:"🐚",img:"",ingredientes:[{qty:"1 bolsa",item:"almejas"},{qty:"3 vasos",item:"arroz"},{qty:"7 vasos",item:"caldo de pescado"},{qty:"2+2",item:"dientes de ajo"},{qty:"1 vaso",item:"vino blanco"},{qty:"1 cda",item:"harina"}],pasos:["Lavar las almejas dejándolas en agua con sal al menos 2 horas.","Sofreír 2 dientes de ajo y añadir las almejas con el vino blanco.","Añadir una cucharada de harina y sofreír hasta que se abran las almejas. Retirarlas y quitar las cerradas.","Hacer un arroz blanco con el caldo de pescado y los otros 2 dientes de ajo.","Incorporar las almejas al arroz al final de la cocción."]}
+];
+
+// ─── ESTADO ───
+let recetas = [];
+let activeCat = "Todas";
+let searchTerm = "";
+let currentId = null;
+let editingId = null;
+let pendingDeleteId = null;
+let currentImgData = "";
+let firstLoad = true;
+
+// ─── FIREBASE: LISTENER EN TIEMPO REAL ───
+colRef.onSnapshot(snapshot => {
+  recetas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a,b) => a.titulo.localeCompare(b.titulo, 'es'));
+
+  if (firstLoad) {
+    firstLoad = false;
+    // Si la base de datos está vacía, cargar las recetas iniciales
+    if (recetas.length === 0) {
+      seedInitialData();
+      return;
+    }
+    hideSplash();
+  }
+
+  setSyncStatus("ok");
+  renderGrid();
+  renderCats();
+}, err => {
+  console.error(err);
+  setSyncStatus("error");
+  hideSplash();
+  showToast("⚠️ Error de conexión con Firebase");
+});
+
+async function seedInitialData() {
+  try {
+    const batch = db.batch();
+    RECETAS_INIT.forEach(r => {
+      batch.set(colRef.doc(), r);
+    });
+    await batch.commit();
+    // El listener onSnapshot actualizará automáticamente
+  } catch(e) {
+    console.error(e);
+    hideSplash();
+    showToast("⚠️ Error al cargar datos iniciales");
+  }
+}
+
+function hideSplash() {
+  const s = document.getElementById("loadingScreen");
+  s.classList.add("hidden");
+  setTimeout(() => s.style.display = "none", 400);
+}
+
+function setSyncStatus(status) {
+  const dot = document.getElementById("syncDot");
+  dot.className = "sync-dot";
+  if (status === "syncing") dot.classList.add("syncing");
+  if (status === "error") dot.classList.add("error");
+}
+
+// ─── RENDER CATEGORÍAS ───
+function renderCats() {
+  const allCats = ["Todas", ...CATS];
+  document.getElementById("catsWrap").innerHTML = allCats.map(c =>
+    `<span class="cat-btn${c===activeCat?' active':''}" onclick="selectCat('${c}')">${c==='Todas'?'🍽️ Todas':(CAT_EMOJI[c]||'')+'&nbsp;'+c}</span>`
+  ).join('');
+}
+
+function selectCat(cat) { activeCat = cat; renderCats(); renderGrid(); }
+
+// ─── RENDER GRID ───
+function filterRecipes() { searchTerm = document.getElementById("searchInput").value.toLowerCase(); renderGrid(); }
+
+function getFiltered() {
+  return recetas.filter(r => {
+    const matchCat = activeCat === "Todas" || r.cat === activeCat;
+    const matchSearch = !searchTerm ||
+      r.titulo.toLowerCase().includes(searchTerm) ||
+      (r.ingredientes||[]).some(i => i.item.toLowerCase().includes(searchTerm));
+    return matchCat && matchSearch;
+  });
+}
+
+function renderGrid() {
+  const filtered = getFiltered();
+  document.getElementById("subtitleCount").textContent = recetas.length + " recetas de familia";
+  document.getElementById("countBar").textContent = filtered.length + " receta" + (filtered.length!==1?"s":"");
+  if (!filtered.length) {
+    document.getElementById("grid").innerHTML = `<div class="no-results">😕<br>No se encontraron recetas</div>`;
+    return;
+  }
+  document.getElementById("grid").innerHTML = filtered.map(r => {
+    const imgHtml = r.img
+      ? `<div class="card-img"><img src="${r.img}" alt="${escHtml(r.titulo)}" loading="lazy"></div>`
+      : `<div class="card-img">${r.emoji||'🍽️'}</div>`;
+    return `<div class="card" onclick="openView('${r.id}')">
+      ${imgHtml}
+      <div class="card-body">
+        <div class="card-title">${escHtml(r.titulo)}</div>
+        <div class="card-cat">${CAT_EMOJI[r.cat]||''} ${r.cat}</div>
+        <div class="card-ing-count">${(r.ingredientes||[]).length} ingredientes</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── MODAL VER ───
+function openView(id) {
+  const r = recetas.find(x => x.id === id);
+  if (!r) return;
+  currentId = id;
+  document.getElementById("mImg").innerHTML = r.img
+    ? `<img src="${r.img}" class="modal-recipe-img" alt="${escHtml(r.titulo)}">`
+    : "";
+  document.getElementById("mEmoji").textContent = r.emoji||'🍽️';
+  document.getElementById("mTitle").textContent = r.titulo;
+  document.getElementById("mCat").textContent = (CAT_EMOJI[r.cat]||'') + ' ' + r.cat;
+  document.getElementById("mIngs").innerHTML = (r.ingredientes||[]).map(i =>
+    `<li><span class="ing-qty">${escHtml(i.qty)}</span><span>${escHtml(i.item)}</span></li>`
+  ).join('');
+  document.getElementById("mSteps").innerHTML = (r.pasos||[]).map((p,i) =>
+    `<li><span class="step-num">${i+1}</span>${escHtml(p)}</li>`
+  ).join('');
+  document.getElementById("viewOverlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeViewModal(e) { if (e.target===document.getElementById("viewOverlay")) closeViewBtn(); }
+function closeViewBtn() { document.getElementById("viewOverlay").classList.remove("open"); document.body.style.overflow=""; }
+function editCurrent() { closeViewBtn(); openEditor(currentId); }
+function deleteCurrent() { pendingDeleteId = currentId; document.getElementById("confirmOverlay").classList.add("open"); }
+
+// ─── ELIMINAR ───
+function closeConfirm() { document.getElementById("confirmOverlay").classList.remove("open"); pendingDeleteId = null; }
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  try {
+    setSyncStatus("syncing");
+    await colRef.doc(pendingDeleteId).delete();
+    closeConfirm();
+    closeViewBtn();
+    showToast("🗑️ Receta eliminada");
+  } catch(e) {
+    showToast("⚠️ Error al eliminar");
+    setSyncStatus("error");
+  }
+}
+
+// ─── EDITOR ───
+function openEditor(id) {
+  editingId = id;
+  currentImgData = "";
+  document.getElementById("editCat").innerHTML = CATS.map(c =>
+    `<option value="${c}">${CAT_EMOJI[c]||''} ${c}</option>`
+  ).join('');
+
+  if (id) {
+    const r = recetas.find(x => x.id === id);
+    document.getElementById("editorTitle").textContent = "Editar Receta";
+    document.getElementById("editEmoji").value = r.emoji||'';
+    document.getElementById("editTitulo").value = r.titulo;
+    document.getElementById("editCat").value = r.cat;
+    currentImgData = r.img||"";
+    if (currentImgData) {
+      document.getElementById("imgPreview").src = currentImgData;
+      document.getElementById("imgPreview").style.display = "block";
+      document.getElementById("imgUploadPlaceholder").style.display = "none";
+      document.getElementById("imgClearBtn").style.display = "inline-block";
+    } else { resetImgUI(); }
+    renderIngRows(r.ingredientes||[]);
+    renderStepRows(r.pasos||[]);
+  } else {
+    document.getElementById("editorTitle").textContent = "Nueva Receta";
+    document.getElementById("editEmoji").value = "🍽️";
+    document.getElementById("editTitulo").value = "";
+    resetImgUI();
+    renderIngRows([{qty:"",item:""}]);
+    renderStepRows([""]);
+  }
+  document.getElementById("editorOverlay").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeEditor() {
+  document.getElementById("editorOverlay").classList.remove("open");
+  document.body.style.overflow = "";
+  document.getElementById("imgFileInput").value = "";
+}
+
+function resetImgUI() {
+  document.getElementById("imgPreview").style.display = "none";
+  document.getElementById("imgPreview").src = "";
+  document.getElementById("imgUploadPlaceholder").style.display = "block";
+  document.getElementById("imgClearBtn").style.display = "none";
+}
+
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h*MAX/w); w = MAX; }
+        else { w = Math.round(w*MAX/h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      currentImgData = canvas.toDataURL("image/jpeg", 0.72);
+      document.getElementById("imgPreview").src = currentImgData;
+      document.getElementById("imgPreview").style.display = "block";
+      document.getElementById("imgUploadPlaceholder").style.display = "none";
+      document.getElementById("imgClearBtn").style.display = "inline-block";
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  currentImgData = "";
+  document.getElementById("imgFileInput").value = "";
+  resetImgUI();
+}
+
+function renderIngRows(ings) {
+  document.getElementById("ingsContainer").innerHTML = "";
+  ings.forEach(ing => addIngRowWith(ing.qty, ing.item));
+}
+function addIngRow() { addIngRowWith("",""); }
+function addIngRowWith(qty, item) {
+  const c = document.getElementById("ingsContainer");
+  const div = document.createElement("div");
+  div.className = "ing-row";
+  div.innerHTML = `<input type="text" class="field-input ing-qty-input" placeholder="Cant." value="${escHtml(qty)}">
+    <input type="text" class="field-input" placeholder="Ingrediente" value="${escHtml(item)}">
+    <button class="btn-remove" onclick="removeRow(this)">✕</button>`;
+  c.appendChild(div);
+}
+
+function renderStepRows(pasos) {
+  document.getElementById("stepsContainer").innerHTML = "";
+  pasos.forEach((p,i) => addStepRowWith(p, i+1));
+}
+function addStepRow() {
+  const c = document.getElementById("stepsContainer");
+  addStepRowWith("", c.children.length+1);
+}
+function addStepRowWith(text, num) {
+  const c = document.getElementById("stepsContainer");
+  const div = document.createElement("div");
+  div.className = "step-row";
+  div.innerHTML = `<div class="step-idx">${num}</div>
+    <textarea class="field-input" placeholder="Describe el paso...">${escHtml(text)}</textarea>
+    <button class="btn-remove" onclick="removeRow(this)">✕</button>`;
+  c.appendChild(div);
+  updateStepNums();
+}
+function removeRow(btn) { btn.parentElement.remove(); updateStepNums(); }
+function updateStepNums() {
+  document.querySelectorAll("#stepsContainer .step-idx").forEach((el,i) => el.textContent = i+1);
+}
+
+async function saveRecipe() {
+  const titulo = document.getElementById("editTitulo").value.trim();
+  if (!titulo) { showToast("⚠️ El nombre es obligatorio"); return; }
+
+  const data = {
+    titulo,
+    cat: document.getElementById("editCat").value,
+    emoji: document.getElementById("editEmoji").value.trim() || "🍽️",
+    img: currentImgData,
+    ingredientes: Array.from(document.querySelectorAll("#ingsContainer .ing-row")).map(row => ({
+      qty: row.querySelector(".ing-qty-input").value.trim(),
+      item: row.querySelectorAll("input")[1].value.trim()
+    })).filter(i => i.item),
+    pasos: Array.from(document.querySelectorAll("#stepsContainer textarea")).map(t => t.value.trim()).filter(Boolean)
+  };
+
+  const btn = document.getElementById("btnSave");
+  btn.disabled = true;
+  btn.textContent = "Guardando…";
+  setSyncStatus("syncing");
+
+  try {
+    if (editingId) {
+      await colRef.doc(editingId).update(data);
+    } else {
+      await colRef.add(data);
+    }
+    closeEditor();
+    showToast(editingId ? "✅ Receta actualizada" : "✅ Receta añadida");
+  } catch(e) {
+    showToast("⚠️ Error al guardar. Comprueba la conexión.");
+    setSyncStatus("error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = "💾 Guardar";
+  }
+}
+
+// ─── TOAST ───
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
+}
+
+function escHtml(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Inicializar categorías mientras carga
+renderCats();
+</script>
+</body>
+</html>
