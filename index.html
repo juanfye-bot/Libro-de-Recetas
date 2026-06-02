@@ -4,186 +4,252 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>📖 Libro de Recetas</title>
-
-<!-- Firebase SDK --> 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
-:root {
-  --verde: #1a6b3c;
-  --verde-claro: #2d9b5a;
-  --verde-muy-claro: #e8f5ee;
-  --crema: #faf8f2;
-  --gris: #6b7280;
-  --borde: #d1fae5;
-  --rojo: #dc2626;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--crema); color: #1f2937; }
-
-/* LOADING */
-.loading-screen { position: fixed; inset: 0; background: var(--verde); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; color: white; gap: 16px; transition: opacity 0.4s; }
-.loading-screen.hidden { opacity: 0; pointer-events: none; }
-.spinner { width: 44px; height: 44px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-screen h2 { font-size: 1.2rem; font-weight: 700; }
-.loading-screen p { font-size: 0.82rem; opacity: 0.75; }
-
-/* SYNC INDICATOR */
-.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; margin-left: 6px; }
-.sync-dot.syncing { background: #fbbf24; animation: pulse 1s infinite; }
-.sync-dot.error { background: #f87171; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-/* HEADER */
-header { background: var(--verde); color: white; padding: 20px 16px 14px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-.header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.header-left h1 { font-size: 1.35rem; font-weight: 800; display: flex; align-items: center; }
-.header-left p { font-size: 0.73rem; opacity: 0.75; margin-top: 2px; }
-.btn-add-top { background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.5); color: white; border-radius: 10px; padding: 7px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
-.btn-add-top:active { background: rgba(255,255,255,0.3); }
-.search-box { margin-top: 12px; position: relative; }
-.search-box input { width: 100%; padding: 10px 36px 10px 14px; border-radius: 10px; border: none; font-size: 0.95rem; background: rgba(255,255,255,0.15); color: white; }
-.search-box input::placeholder { color: rgba(255,255,255,0.6); }
-.search-box input:focus { outline: none; background: rgba(255,255,255,0.25); }
-.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); opacity: 0.7; }
-
-/* CATEGORÍAS */
-.cats-wrap { overflow-x: auto; white-space: nowrap; padding: 12px 16px; background: white; border-bottom: 1px solid var(--borde); scrollbar-width: none; }
-.cats-wrap::-webkit-scrollbar { display: none; }
-.cat-btn { display: inline-block; padding: 6px 14px; margin-right: 8px; border-radius: 20px; border: 1.5px solid var(--borde); background: white; color: var(--verde); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
-.cat-btn.active, .cat-btn:hover { background: var(--verde); color: white; border-color: var(--verde); }
-
-.count-bar { padding: 8px 16px; font-size: 0.78rem; color: var(--gris); }
-
-/* GRID */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px 100px; }
-.card { background: white; border-radius: 14px; overflow: hidden; border: 1px solid var(--borde); cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; }
-.card:active { transform: scale(0.97); }
-.card:hover { box-shadow: 0 4px 12px rgba(26,107,60,0.15); }
-.card-img { width: 100%; height: 90px; background: var(--verde-muy-claro); display: flex; align-items: center; justify-content: center; font-size: 2.2rem; overflow: hidden; }
-.card-img img { width: 100%; height: 90px; object-fit: cover; display: block; }
-.card-body { padding: 10px 12px 12px; }
-.card-title { font-size: 0.85rem; font-weight: 700; color: #1f2937; line-height: 1.3; }
-.card-cat { font-size: 0.7rem; color: var(--verde-claro); font-weight: 600; margin-top: 3px; }
-.card-ing-count { font-size: 0.68rem; color: var(--gris); margin-top: 3px; }
-.no-results { grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--gris); }
-
-/* OVERLAY BASE */
-.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; }
-.overlay.open { display: flex; align-items: flex-end; }
-
-/* MODAL VER */
-.modal { background: white; border-radius: 20px 20px 0 0; width: 100%; max-height: 92vh; overflow-y: auto; padding-bottom: 32px; }
-.modal-header { background: var(--verde); color: white; padding: 18px 16px 14px; border-radius: 20px 20px 0 0; position: sticky; top: 0; z-index: 10; }
-.modal-header-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; }
-.btn-icon { background: rgba(255,255,255,0.2); border: none; color: white; width: 34px; height: 34px; border-radius: 50%; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.modal-recipe-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; display: block; }
-.modal-emoji { font-size: 2.2rem; margin-bottom: 4px; }
-.modal-title { font-size: 1.25rem; font-weight: 800; line-height: 1.2; }
-.modal-cat-tag { display: inline-block; background: rgba(255,255,255,0.2); border-radius: 10px; padding: 2px 10px; font-size: 0.73rem; margin-top: 6px; }
-.modal-body { padding: 18px 16px; }
-.section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--verde); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-.section-label::after { content: ''; flex: 1; height: 1px; background: var(--borde); }
-.ing-list { list-style: none; margin-bottom: 24px; }
-.ing-list li { padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.87rem; display: flex; gap: 8px; align-items: baseline; }
-.ing-list li:last-child { border-bottom: none; }
-.ing-qty { font-weight: 700; color: var(--verde); min-width: 40px; font-size: 0.83rem; flex-shrink: 0; }
-.steps-list { list-style: none; }
-.steps-list li { padding: 10px 0 10px 36px; border-bottom: 1px solid #f3f4f6; font-size: 0.87rem; position: relative; line-height: 1.5; }
-.steps-list li:last-child { border-bottom: none; }
-.step-num { position: absolute; left: 0; top: 10px; width: 24px; height: 24px; background: var(--verde); color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-
-/* EDITOR */
-.editor-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 300; }
-.editor-overlay.open { display: flex; align-items: flex-end; }
-.editor-modal { background: white; border-radius: 20px 20px 0 0; width: 100%; max-height: 95vh; overflow-y: auto; padding-bottom: 40px; }
-.editor-header { background: var(--verde); color: white; padding: 18px 16px 14px; border-radius: 20px 20px 0 0; position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; }
-.editor-header h2 { font-size: 1.1rem; font-weight: 800; }
-.editor-body { padding: 20px 16px; }
-.field-group { margin-bottom: 18px; }
-.field-label { font-size: 0.75rem; font-weight: 700; color: var(--verde); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block; }
-.field-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--borde); border-radius: 10px; font-size: 0.9rem; color: #1f2937; background: white; }
-.field-input:focus { outline: none; border-color: var(--verde); }
-select.field-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231a6b3c' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
-
-.img-upload-area { border: 2px dashed var(--borde); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; position: relative; }
-.img-upload-area:hover { border-color: var(--verde); background: var(--verde-muy-claro); }
-.img-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
-.img-preview { width: 100%; max-height: 180px; object-fit: cover; border-radius: 10px; display: block; margin-top: 10px; }
-.img-clear-btn { margin-top: 8px; background: none; border: 1px solid #fca5a5; color: var(--rojo); border-radius: 8px; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; }
-
-.ing-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-.ing-row input:first-child { width: 80px; flex-shrink: 0; }
-.ing-row input:last-of-type { flex: 1; }
-.btn-remove { background: none; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0; }
-.btn-remove:hover { color: var(--rojo); }
-.btn-add-row { display: flex; align-items: center; gap: 6px; background: none; border: 1.5px dashed var(--borde); border-radius: 8px; color: var(--verde); font-size: 0.82rem; font-weight: 600; padding: 7px 12px; cursor: pointer; width: 100%; justify-content: center; margin-top: 4px; }
-.btn-add-row:hover { background: var(--verde-muy-claro); }
-
-.step-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
-.step-row textarea { flex: 1; padding: 8px 10px; border: 1.5px solid var(--borde); border-radius: 8px; font-size: 0.87rem; resize: vertical; min-height: 56px; font-family: inherit; color: #1f2937; }
-.step-row textarea:focus { outline: none; border-color: var(--verde); }
-.step-idx { width: 24px; height: 24px; background: var(--verde); color: white; border-radius: 50%; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 8px; }
-
-.editor-actions { display: flex; gap: 10px; margin-top: 24px; }
-.btn-save { flex: 1; background: var(--verde); color: white; border: none; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-cancel-edit { flex: 0; background: #f3f4f6; color: #374151; border: none; border-radius: 12px; padding: 14px 18px; font-size: 1rem; font-weight: 600; cursor: pointer; }
-
-/* CONFIRMACIÓN */
-.confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 400; align-items: center; justify-content: center; padding: 20px; }
-.confirm-overlay.open { display: flex; }
-.confirm-box { background: white; border-radius: 16px; padding: 24px; width: 100%; max-width: 320px; text-align: center; }
-.confirm-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
-.confirm-box p { font-size: 0.85rem; color: var(--gris); margin-bottom: 20px; }
-.confirm-actions { display: flex; gap: 10px; }
-.btn-confirm-del { flex: 1; background: var(--rojo); color: white; border: none; border-radius: 10px; padding: 11px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
-.btn-confirm-cancel { flex: 1; background: #f3f4f6; color: #374151; border: none; border-radius: 10px; padding: 11px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
-
-/* TOAST */
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1f2937; color: white; border-radius: 10px; padding: 10px 20px; font-size: 0.85rem; font-weight: 600; z-index: 500; transition: transform 0.3s; white-space: nowrap; pointer-events: none; }
-.toast.show { transform: translateX(-50%) translateY(0); }
+:root{--verde:#1a6b3c;--verde-claro:#2d9b5a;--verde-muy-claro:#e8f5ee;--crema:#faf8f2;--gris:#6b7280;--borde:#d1fae5;--rojo:#dc2626;--naranja:#ea580c;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--crema);color:#1f2937;overflow-x:hidden;}
+.loading-screen{position:fixed;inset:0;background:var(--verde);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;color:white;gap:16px;transition:opacity 0.4s;}
+.loading-screen.hidden{opacity:0;pointer-events:none;}
+.spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+header{background:var(--verde);color:white;padding:16px 16px 12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+.header-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.header-left h1{font-size:1.2rem;font-weight:800;display:flex;align-items:center;gap:6px;}
+.header-left p{font-size:0.72rem;opacity:0.75;margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.btn-add-top{background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.4);color:white;border-radius:10px;padding:6px 12px;font-size:0.82rem;font-weight:700;cursor:pointer;}
+.user-avatar{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);cursor:pointer;object-fit:cover;}
+.btn-login{background:white;color:var(--verde);border:none;border-radius:10px;padding:7px 12px;font-size:0.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.search-box{margin-top:10px;position:relative;}
+.search-box input{width:100%;padding:9px 36px 9px 14px;border-radius:10px;border:none;font-size:0.9rem;background:rgba(255,255,255,0.15);color:white;}
+.search-box input::placeholder{color:rgba(255,255,255,0.6);}
+.search-box input:focus{outline:none;background:rgba(255,255,255,0.25);}
+.search-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);opacity:0.7;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;}
+.sync-dot.syncing{background:#fbbf24;animation:pulse 1s infinite;}
+.sync-dot.error{background:#f87171;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid var(--borde);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
+.nav-btn{flex:1;padding:10px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;border:none;background:none;color:var(--gris);font-size:0.65rem;font-weight:600;}
+.nav-btn .nav-icon{font-size:1.4rem;line-height:1;}
+.nav-btn.active{color:var(--verde);}
+.tab-panel{display:none;padding-bottom:80px;}
+.tab-panel.active{display:block;}
+.cats-wrap{overflow-x:auto;white-space:nowrap;padding:10px 16px;background:white;border-bottom:1px solid var(--borde);scrollbar-width:none;}
+.cats-wrap::-webkit-scrollbar{display:none;}
+.cat-btn{display:inline-block;padding:5px 12px;margin-right:8px;border-radius:20px;border:1.5px solid var(--borde);background:white;color:var(--verde);font-size:0.78rem;font-weight:600;cursor:pointer;}
+.cat-btn.active,.cat-btn:hover{background:var(--verde);color:white;border-color:var(--verde);}
+.count-bar{padding:7px 16px;font-size:0.75rem;color:var(--gris);}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 16px;}
+.card{background:white;border-radius:14px;overflow:hidden;border:1px solid var(--borde);cursor:pointer;transition:transform 0.12s,box-shadow 0.12s;}
+.card:active{transform:scale(0.97);}
+.card:hover{box-shadow:0 4px 12px rgba(26,107,60,0.15);}
+.card-img{width:100%;height:88px;background:var(--verde-muy-claro);display:flex;align-items:center;justify-content:center;font-size:2rem;overflow:hidden;}
+.card-img img{width:100%;height:88px;object-fit:cover;}
+.card-body{padding:9px 11px 11px;}
+.card-title{font-size:0.82rem;font-weight:700;line-height:1.3;}
+.card-cat{font-size:0.68rem;color:var(--verde-claro);font-weight:600;margin-top:3px;}
+.card-ing-count{font-size:0.65rem;color:var(--gris);margin-top:2px;}
+.no-results{grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--gris);}
+.lists-header{padding:16px;display:flex;align-items:center;justify-content:space-between;}
+.lists-header h2{font-size:1rem;font-weight:700;}
+.btn-new-list{background:var(--verde);color:white;border:none;border-radius:10px;padding:8px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;}
+.lista-card{background:white;border-radius:14px;border:1px solid var(--borde);margin:0 16px 12px;overflow:hidden;}
+.lista-card-header{padding:14px 14px 10px;cursor:pointer;}
+.lista-card-title{font-size:0.95rem;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.lista-badge{font-size:0.65rem;padding:2px 8px;border-radius:10px;font-weight:700;}
+.badge-privada{background:#fef3c7;color:#92400e;}
+.badge-publica{background:var(--verde-muy-claro);color:var(--verde);}
+.lista-card-meta{font-size:0.72rem;color:var(--gris);margin-top:4px;}
+.lista-card-actions{display:flex;gap:8px;padding:0 14px 12px;flex-wrap:wrap;}
+.btn-sm{padding:6px 12px;border-radius:8px;border:none;font-size:0.78rem;font-weight:600;cursor:pointer;}
+.btn-sm-green{background:var(--verde);color:white;}
+.btn-sm-outline{background:white;color:var(--verde);border:1.5px solid var(--borde);}
+.btn-sm-red{background:#fee2e2;color:var(--rojo);}
+.lista-recetas-preview{display:flex;gap:6px;padding:0 14px 12px;overflow-x:auto;scrollbar-width:none;}
+.lista-recetas-preview::-webkit-scrollbar{display:none;}
+.preview-chip{background:var(--verde-muy-claro);color:var(--verde);font-size:0.7rem;font-weight:600;padding:4px 10px;border-radius:10px;white-space:nowrap;}
+.empty-state{text-align:center;padding:48px 20px;color:var(--gris);}
+.empty-state .empty-icon{font-size:3rem;margin-bottom:12px;}
+.empty-state p{font-size:0.85rem;margin-bottom:16px;}
+.login-prompt{background:white;border-radius:16px;margin:16px;padding:24px;text-align:center;border:1px solid var(--borde);}
+.login-prompt h3{font-size:1rem;font-weight:700;margin-bottom:8px;}
+.login-prompt p{font-size:0.83rem;color:var(--gris);margin-bottom:16px;}
+.btn-google{background:white;border:1.5px solid #e5e7eb;color:#374151;border-radius:10px;padding:10px 20px;font-size:0.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;margin:0 auto;}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;}
+.overlay.open{display:flex;align-items:flex-end;}
+.modal{background:white;border-radius:20px 20px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding-bottom:32px;}
+.modal-header{background:var(--verde);color:white;padding:16px 16px 12px;border-radius:20px 20px 0 0;position:sticky;top:0;z-index:10;}
+.modal-header-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;}
+.btn-icon{background:rgba(255,255,255,0.2);border:none;color:white;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.modal-recipe-img{width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:10px;display:block;}
+.modal-emoji{font-size:2rem;margin-bottom:4px;}
+.modal-title{font-size:1.2rem;font-weight:800;line-height:1.2;}
+.modal-cat-tag{display:inline-block;background:rgba(255,255,255,0.2);border-radius:10px;padding:2px 10px;font-size:0.72rem;margin-top:5px;}
+.modal-body{padding:16px;}
+.section-label{font-size:0.67rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--verde);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--borde);}
+.ing-list{list-style:none;margin-bottom:20px;}
+.ing-list li{padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:0.85rem;display:flex;gap:8px;}
+.ing-list li:last-child{border-bottom:none;}
+.ing-qty{font-weight:700;color:var(--verde);min-width:40px;font-size:0.82rem;flex-shrink:0;}
+.steps-list{list-style:none;margin-bottom:20px;}
+.steps-list li{padding:9px 0 9px 34px;border-bottom:1px solid #f3f4f6;font-size:0.85rem;position:relative;line-height:1.5;}
+.steps-list li:last-child{border-bottom:none;}
+.step-num{position:absolute;left:0;top:9px;width:24px;height:24px;background:var(--verde);color:white;border-radius:50%;font-size:0.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.btn-add-to-list{width:100%;background:var(--verde-muy-claro);color:var(--verde);border:1.5px solid var(--borde);border-radius:12px;padding:12px;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;}
+.btn-add-to-list:hover{background:var(--verde);color:white;}
+.editor-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;}
+.editor-overlay.open{display:flex;align-items:flex-end;}
+.editor-modal{background:white;border-radius:20px 20px 0 0;width:100%;max-height:95vh;overflow-y:auto;padding-bottom:40px;}
+.editor-header{background:var(--verde);color:white;padding:16px;border-radius:20px 20px 0 0;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;}
+.editor-header h2{font-size:1.05rem;font-weight:800;}
+.editor-body{padding:18px 16px;}
+.field-group{margin-bottom:16px;}
+.field-label{font-size:0.72rem;font-weight:700;color:var(--verde);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;display:block;}
+.field-input{width:100%;padding:10px 12px;border:1.5px solid var(--borde);border-radius:10px;font-size:0.88rem;color:#1f2937;background:white;}
+.field-input:focus{outline:none;border-color:var(--verde);}
+select.field-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%231a6b3c' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;}
+.img-upload-area{border:2px dashed var(--borde);border-radius:12px;padding:18px;text-align:center;cursor:pointer;position:relative;}
+.img-upload-area:hover{border-color:var(--verde);background:var(--verde-muy-claro);}
+.img-upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;}
+.img-preview{width:100%;max-height:160px;object-fit:cover;border-radius:10px;display:block;margin-top:10px;}
+.img-clear-btn{margin-top:6px;background:none;border:1px solid #fca5a5;color:var(--rojo);border-radius:8px;padding:4px 12px;font-size:0.75rem;cursor:pointer;}
+.ing-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;}
+.ing-row input:first-child{width:75px;flex-shrink:0;}
+.ing-row input:last-of-type{flex:1;}
+.btn-remove{background:none;border:none;color:#9ca3af;font-size:1.2rem;cursor:pointer;padding:0 4px;flex-shrink:0;}
+.btn-remove:hover{color:var(--rojo);}
+.btn-add-row{display:flex;align-items:center;gap:6px;background:none;border:1.5px dashed var(--borde);border-radius:8px;color:var(--verde);font-size:0.8rem;font-weight:600;padding:7px 12px;cursor:pointer;width:100%;justify-content:center;margin-top:4px;}
+.btn-add-row:hover{background:var(--verde-muy-claro);}
+.step-row{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;}
+.step-row textarea{flex:1;padding:8px 10px;border:1.5px solid var(--borde);border-radius:8px;font-size:0.85rem;resize:vertical;min-height:52px;font-family:inherit;color:#1f2937;}
+.step-row textarea:focus{outline:none;border-color:var(--verde);}
+.step-idx{width:24px;height:24px;background:var(--verde);color:white;border-radius:50%;font-size:0.68rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:8px;}
+.editor-actions{display:flex;gap:10px;margin-top:20px;}
+.btn-save{flex:1;background:var(--verde);color:white;border:none;border-radius:12px;padding:13px;font-size:0.95rem;font-weight:700;cursor:pointer;}
+.btn-save:disabled{opacity:0.6;cursor:not-allowed;}
+.btn-cancel-edit{background:#f3f4f6;color:#374151;border:none;border-radius:12px;padding:13px 16px;font-size:0.95rem;font-weight:600;cursor:pointer;}
+.sheet-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:400;}
+.sheet-overlay.open{display:flex;align-items:flex-end;}
+.sheet{background:white;border-radius:20px 20px 0 0;width:100%;padding:20px 16px 40px;}
+.sheet h3{font-size:1rem;font-weight:800;margin-bottom:16px;}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f3f4f6;}
+.toggle-label{font-size:0.88rem;font-weight:600;}
+.toggle-sub{font-size:0.73rem;color:var(--gris);margin-top:2px;}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:#d1d5db;border-radius:12px;cursor:pointer;transition:0.2s;}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:white;border-radius:50%;transition:0.2s;}
+.toggle input:checked+.toggle-slider{background:var(--verde);}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);}
+.sheet-actions{display:flex;gap:10px;margin-top:20px;}
+.list-picker-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f3f4f6;cursor:pointer;}
+.list-picker-item:last-child{border-bottom:none;}
+.list-picker-name{font-size:0.88rem;font-weight:600;}
+.list-picker-meta{font-size:0.72rem;color:var(--gris);margin-top:2px;}
+.check-icon{color:var(--verde);font-size:1.2rem;}
+.lista-detail-header{background:var(--verde);color:white;padding:16px;border-radius:20px 20px 0 0;position:sticky;top:0;z-index:10;}
+.lista-detail-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;}
+.lista-detail-title{font-size:1.15rem;font-weight:800;}
+.lista-detail-meta{font-size:0.73rem;opacity:0.8;margin-top:3px;}
+.recipe-list-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f3f4f6;}
+.recipe-list-item:last-child{border-bottom:none;}
+.recipe-list-emoji{font-size:1.6rem;flex-shrink:0;cursor:pointer;}
+.recipe-list-info{flex:1;cursor:pointer;}
+.recipe-list-title{font-size:0.88rem;font-weight:700;}
+.recipe-list-cat{font-size:0.72rem;color:var(--gris);margin-top:2px;}
+.btn-remove-from-list{background:none;border:none;color:#d1d5db;font-size:1.1rem;cursor:pointer;padding:4px;flex-shrink:0;}
+.btn-remove-from-list:hover{color:var(--rojo);}
+.btn-compra{width:calc(100% - 32px);margin:16px;background:var(--naranja);color:white;border:none;border-radius:12px;padding:14px;font-size:0.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.compra-header{background:var(--naranja);color:white;padding:16px;border-radius:20px 20px 0 0;position:sticky;top:0;z-index:10;}
+.compra-title{font-size:1.1rem;font-weight:800;margin-bottom:4px;}
+.compra-meta{font-size:0.73rem;opacity:0.85;}
+.compra-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;}
+.compra-section-title{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gris);padding:12px 16px 6px;background:#f9fafb;}
+.compra-item{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #f3f4f6;cursor:pointer;}
+.compra-item:last-child{border-bottom:none;}
+.compra-check{width:22px;height:22px;border:2px solid var(--borde);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.compra-check.checked{background:var(--verde);border-color:var(--verde);}
+.compra-check.checked::after{content:'✓';color:white;font-size:0.8rem;font-weight:700;}
+.compra-item-text{font-size:0.87rem;flex:1;}
+.compra-item-text.done{text-decoration:line-through;color:var(--gris);}
+.compra-qty{font-weight:700;color:var(--verde);margin-right:4px;}
+.btn-copy{width:calc(100% - 32px);margin:16px;background:var(--naranja);color:white;border:none;border-radius:12px;padding:13px;font-size:0.9rem;font-weight:700;cursor:pointer;}
+.user-menu-overlay{display:none;position:fixed;inset:0;z-index:500;}
+.user-menu-overlay.open{display:block;}
+.user-menu{position:fixed;top:60px;right:12px;background:white;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,0.15);padding:8px 0;min-width:200px;z-index:501;}
+.user-menu-name{padding:10px 16px 6px;font-size:0.82rem;font-weight:700;color:#374151;border-bottom:1px solid #f3f4f6;}
+.user-menu-email{font-size:0.72rem;color:var(--gris);font-weight:400;}
+.user-menu-item{padding:10px 16px;font-size:0.85rem;cursor:pointer;color:#374151;display:flex;align-items:center;gap:8px;}
+.user-menu-item:hover{background:#f9fafb;}
+.user-menu-item.danger{color:var(--rojo);}
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:center;justify-content:center;padding:20px;}
+.confirm-overlay.open{display:flex;}
+.confirm-box{background:white;border-radius:16px;padding:24px;width:100%;max-width:320px;text-align:center;}
+.confirm-box h3{font-size:1rem;font-weight:700;margin-bottom:8px;}
+.confirm-box p{font-size:0.83rem;color:var(--gris);margin-bottom:18px;}
+.confirm-actions{display:flex;gap:10px;}
+.btn-confirm-del{flex:1;background:var(--rojo);color:white;border:none;border-radius:10px;padding:11px;font-weight:700;cursor:pointer;font-size:0.88rem;}
+.btn-confirm-cancel{flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:10px;padding:11px;font-weight:600;cursor:pointer;font-size:0.88rem;}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(60px);background:#1f2937;color:white;border-radius:10px;padding:9px 18px;font-size:0.83rem;font-weight:600;z-index:700;transition:transform 0.3s;white-space:nowrap;pointer-events:none;}
+.toast.show{transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
 
-<!-- PANTALLA DE CARGA -->
 <div class="loading-screen" id="loadingScreen">
   <div style="font-size:3rem">📖</div>
   <div class="spinner"></div>
-  <h2>Cargando recetas…</h2>
-  <p>Conectando con la nube</p>
+  <p style="font-size:0.9rem;opacity:0.8;margin-top:8px">Cargando recetas…</p>
 </div>
 
-<!-- HEADER -->
 <header>
   <div class="header-row">
     <div class="header-left">
-      <h1>📖 Libro de Recetas <span class="sync-dot" id="syncDot" title="Sincronizado"></span></h1>
+      <h1>📖 Recetas <span class="sync-dot" id="syncDot"></span></h1>
       <p id="subtitleCount"></p>
     </div>
-    <button class="btn-add-top" onclick="openEditor(null)">＋ Añadir</button>
+    <div class="header-right">
+      <button class="btn-add-top" id="btnAddReceta" onclick="openEditor(null)" style="display:none">＋ Receta</button>
+      <img class="user-avatar" id="userAvatar" style="display:none" onclick="toggleUserMenu()">
+      <button class="btn-login" id="btnLogin" onclick="loginWithGoogle()">
+        <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Entrar
+      </button>
+    </div>
   </div>
-  <div class="search-box">
+  <div class="search-box" id="searchBox">
     <input type="text" id="searchInput" placeholder="Buscar receta o ingrediente…" oninput="filterRecipes()">
     <span class="search-icon">🔍</span>
   </div>
 </header>
 
-<div class="cats-wrap" id="catsWrap"></div>
-<div class="count-bar" id="countBar"></div>
-<div class="grid" id="grid"></div>
+<nav class="bottom-nav">
+  <button class="nav-btn active" id="nav-recetas" onclick="switchTab('recetas')"><span class="nav-icon">🍽️</span>Recetas</button>
+  <button class="nav-btn" id="nav-mis-listas" onclick="switchTab('mis-listas')"><span class="nav-icon">📋</span>Mis Listas</button>
+  <button class="nav-btn" id="nav-compartidas" onclick="switchTab('compartidas')"><span class="nav-icon">🌍</span>Compartidas</button>
+</nav>
 
-<!-- MODAL VER -->
+<div class="tab-panel active" id="tab-recetas">
+  <div class="cats-wrap" id="catsWrap"></div>
+  <div class="count-bar" id="countBar"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<div class="tab-panel" id="tab-mis-listas"><div id="misListasContent"></div></div>
+<div class="tab-panel" id="tab-compartidas"><div id="compartidasContent"></div></div>
+
+<!-- MODAL VER RECETA -->
 <div class="overlay" id="viewOverlay" onclick="closeViewModal(event)">
-  <div class="modal" id="viewModal">
+  <div class="modal">
     <div class="modal-header">
       <div class="modal-header-actions">
-        <button class="btn-icon" title="Editar" onclick="editCurrent()">✏️</button>
-        <button class="btn-icon" title="Eliminar" onclick="deleteCurrent()">🗑️</button>
-        <button class="btn-icon" title="Cerrar" onclick="closeViewBtn()">✕</button>
+        <button class="btn-icon" id="btnEditReceta" onclick="editCurrent()" style="display:none">✏️</button>
+        <button class="btn-icon" id="btnDeleteReceta" onclick="deleteCurrent()" style="display:none">🗑️</button>
+        <button class="btn-icon" onclick="closeViewBtn()">✕</button>
       </div>
       <div id="mImg"></div>
       <div class="modal-emoji" id="mEmoji"></div>
@@ -195,65 +261,103 @@ select.field-input { appearance: none; background-image: url("data:image/svg+xml
       <ul class="ing-list" id="mIngs"></ul>
       <div class="section-label">Preparación</div>
       <ol class="steps-list" id="mSteps"></ol>
+      <button class="btn-add-to-list" id="btnAddToList" onclick="openListPicker()" style="display:none">📋 Añadir a una lista</button>
     </div>
   </div>
 </div>
 
-<!-- EDITOR -->
+<!-- EDITOR RECETA -->
 <div class="editor-overlay" id="editorOverlay">
   <div class="editor-modal">
-    <div class="editor-header">
-      <h2 id="editorTitle">Nueva Receta</h2>
-      <button class="btn-icon" onclick="closeEditor()">✕</button>
-    </div>
+    <div class="editor-header"><h2 id="editorTitle">Nueva Receta</h2><button class="btn-icon" onclick="closeEditor()">✕</button></div>
     <div class="editor-body">
       <div class="field-group">
-        <label class="field-label">📷 Foto de la receta</label>
+        <label class="field-label">📷 Foto</label>
         <div class="img-upload-area">
           <input type="file" accept="image/*" id="imgFileInput" onchange="handleImageUpload(event)">
-          <div id="imgUploadPlaceholder"><div style="font-size:2rem;margin-bottom:6px">🖼️</div><div style="font-size:0.82rem;color:var(--gris)">Toca para subir una foto</div></div>
+          <div id="imgUploadPlaceholder"><div style="font-size:1.8rem;margin-bottom:4px">🖼️</div><div style="font-size:0.8rem;color:var(--gris)">Toca para subir una foto</div></div>
           <img id="imgPreview" class="img-preview" style="display:none">
         </div>
         <button class="img-clear-btn" id="imgClearBtn" style="display:none" onclick="clearImage()">✕ Quitar imagen</button>
       </div>
-      <div class="field-group">
-        <label class="field-label">Emoji</label>
-        <input type="text" class="field-input" id="editEmoji" placeholder="🍽️" maxlength="4">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Nombre de la receta *</label>
-        <input type="text" class="field-input" id="editTitulo" placeholder="Ej: Lentejas con chorizo">
-      </div>
-      <div class="field-group">
-        <label class="field-label">Categoría *</label>
-        <select class="field-input" id="editCat"></select>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Ingredientes</label>
-        <div id="ingsContainer"></div>
-        <button class="btn-add-row" onclick="addIngRow()">＋ Añadir ingrediente</button>
-      </div>
-      <div class="field-group">
-        <label class="field-label">Pasos de preparación</label>
-        <div id="stepsContainer"></div>
-        <button class="btn-add-row" onclick="addStepRow()">＋ Añadir paso</button>
-      </div>
-      <div class="editor-actions">
-        <button class="btn-cancel-edit" onclick="closeEditor()">Cancelar</button>
-        <button class="btn-save" id="btnSave" onclick="saveRecipe()">💾 Guardar</button>
-      </div>
+      <div class="field-group"><label class="field-label">Emoji</label><input type="text" class="field-input" id="editEmoji" placeholder="🍽️" maxlength="4"></div>
+      <div class="field-group"><label class="field-label">Nombre *</label><input type="text" class="field-input" id="editTitulo" placeholder="Nombre de la receta"></div>
+      <div class="field-group"><label class="field-label">Categoría *</label><select class="field-input" id="editCat"></select></div>
+      <div class="field-group"><label class="field-label">Ingredientes</label><div id="ingsContainer"></div><button class="btn-add-row" onclick="addIngRow()">＋ Añadir ingrediente</button></div>
+      <div class="field-group"><label class="field-label">Pasos</label><div id="stepsContainer"></div><button class="btn-add-row" onclick="addStepRow()">＋ Añadir paso</button></div>
+      <div class="editor-actions"><button class="btn-cancel-edit" onclick="closeEditor()">Cancelar</button><button class="btn-save" id="btnSave" onclick="saveRecipe()">💾 Guardar</button></div>
     </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVA LISTA -->
+<div class="sheet-overlay" id="listaEditorOverlay" onclick="closeListaEditorModal(event)">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3 id="listaEditorTitle">Nueva lista</h3>
+    <div class="field-group"><label class="field-label">Nombre de la lista</label><input type="text" class="field-input" id="listaNombre" placeholder="Ej: Menú de Navidad"></div>
+    <div class="toggle-row">
+      <div><div class="toggle-label">Lista pública</div><div class="toggle-sub">Todos los usuarios podrán verla</div></div>
+      <label class="toggle"><input type="checkbox" id="listaPublica"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="sheet-actions"><button class="btn-cancel-edit" onclick="closeListaEditorBtn()">Cancelar</button><button class="btn-save" onclick="saveLista()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- PICKER LISTA -->
+<div class="sheet-overlay" id="listPickerOverlay" onclick="closeListPickerModal(event)">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3>Añadir a una lista</h3>
+    <div id="listPickerContent"></div>
+    <button class="btn-add-row" style="margin-top:12px" onclick="closeListPickerBtn();openListaEditor(null)">＋ Crear nueva lista</button>
+  </div>
+</div>
+
+<!-- DETALLE LISTA -->
+<div class="overlay" id="listaDetailOverlay" onclick="closeListaDetailModal(event)">
+  <div class="modal">
+    <div class="lista-detail-header">
+      <div class="lista-detail-actions">
+        <button class="btn-icon" id="btnEditLista" onclick="editCurrentLista()">✏️</button>
+        <button class="btn-icon" id="btnDeleteLista" onclick="deleteCurrentLista()" style="display:none">🗑️</button>
+        <button class="btn-icon" onclick="closeListaDetailBtn()">✕</button>
+      </div>
+      <div class="lista-detail-title" id="listaDetailTitle"></div>
+      <div class="lista-detail-meta" id="listaDetailMeta"></div>
+    </div>
+    <div id="listaDetailRecetas"></div>
+    <button class="btn-compra" onclick="openListaCompra()">🛒 Generar lista de la compra</button>
+  </div>
+</div>
+
+<!-- LISTA DE LA COMPRA -->
+<div class="overlay" id="compraOverlay" onclick="closeCompraModal(event)">
+  <div class="modal">
+    <div class="compra-header">
+      <div class="compra-actions"><button class="btn-icon" onclick="closeCompraBtn()">✕</button></div>
+      <div class="compra-title">🛒 Lista de la compra</div>
+      <div class="compra-meta" id="compraMeta"></div>
+    </div>
+    <div id="compraItems"></div>
+    <button class="btn-copy" onclick="copyCompra()">📋 Copiar al portapapeles</button>
+  </div>
+</div>
+
+<!-- USER MENU -->
+<div class="user-menu-overlay" id="userMenuOverlay" onclick="closeUserMenu()">
+  <div class="user-menu" onclick="event.stopPropagation()">
+    <div class="user-menu-name" id="userMenuName"></div>
+    <div class="user-menu-item danger" onclick="logout()">🚪 Cerrar sesión</div>
   </div>
 </div>
 
 <!-- CONFIRMACIÓN -->
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
-    <h3>🗑️ Eliminar receta</h3>
-    <p>¿Seguro que quieres eliminar esta receta? No se puede deshacer.</p>
+    <h3 id="confirmTitle">¿Eliminar?</h3>
+    <p id="confirmMsg">Esta acción no se puede deshacer.</p>
     <div class="confirm-actions">
       <button class="btn-confirm-cancel" onclick="closeConfirm()">Cancelar</button>
-      <button class="btn-confirm-del" onclick="confirmDelete()">Eliminar</button>
+      <button class="btn-confirm-del" onclick="runConfirm()">Eliminar</button>
     </div>
   </div>
 </div>
@@ -261,381 +365,321 @@ select.field-input { appearance: none; background-image: url("data:image/svg+xml
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── FIREBASE CONFIG ───
-const firebaseConfig = {
-  apiKey: "AIzaSyC6p3ccDHxEuEeolhj-LRyI-23meOBQxz0",
-  authDomain: "libro-de-recetas-f397c.firebaseapp.com",
-  projectId: "libro-de-recetas-f397c",
-  storageBucket: "libro-de-recetas-f397c.firebasestorage.app",
-  messagingSenderId: "646239982290",
-  appId: "1:646239982290:web:fd701ba20e0777cdced30b",
-  measurementId: "G-FKKRDNFZSN"
-};
+const firebaseConfig={apiKey:"AIzaSyC6p3ccDHxEuEeolhj-LRyI-23meOBQxz0",authDomain:"libro-de-recetas-f397c.firebaseapp.com",projectId:"libro-de-recetas-f397c",storageBucket:"libro-de-recetas-f397c.firebasestorage.app",messagingSenderId:"646239982290",appId:"1:646239982290:web:fd701ba20e0777cdced30b"};
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const colRef = db.collection("recetas");
+const db=firebase.firestore(),auth=firebase.auth(),provider=new firebase.auth.GoogleAuthProvider();
 
-// ─── CONSTANTES ───
-const CATS = ["Sopas y Cremas","Verduras y Guarniciones","Carnes","Pescados y Mariscos","Arroces","Legumbres","Salsas y Bases","Postres","Otros"];
-const CAT_EMOJI = {"Sopas y Cremas":"🥣","Verduras y Guarniciones":"🥦","Carnes":"🥩","Pescados y Mariscos":"🐟","Arroces":"🍚","Legumbres":"🫘","Salsas y Bases":"🫙","Postres":"🍰","Otros":"🥗"};
+const CATS=["Sopas y Cremas","Verduras y Guarniciones","Carnes","Pescados y Mariscos","Arroces","Legumbres","Salsas y Bases","Postres","Otros"];
+const CE={"Sopas y Cremas":"🥣","Verduras y Guarniciones":"🥦","Carnes":"🥩","Pescados y Mariscos":"🐟","Arroces":"🍚","Legumbres":"🫘","Salsas y Bases":"🫙","Postres":"🍰","Otros":"🥗"};
 
-// ─── DATOS INICIALES ───
-const RECETAS_INIT = [
-  {titulo:"Puré de Verduras",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1",item:"calabaza"},{qty:"1",item:"espinacas"},{qty:"1",item:"tomate"},{qty:"...",item:"otras verduras al gusto"},{qty:"",item:"sal"}],pasos:["Limpiar y trocear la verdura.","Rehogar la verdura en la olla exprés con un poco de sal.","Añadir agua sin llegar a cubrir.","Cerrar la olla, ponerla en el 2 de la válvula y el fuego al 9 de 9.","Cuando suba la válvula, apagar y retirar del fuego.","Cuando se vaya la presión, abrir y pasar por el chino."]},
-  {titulo:"Habas",cat:"Verduras y Guarniciones",emoji:"🌿",img:"",ingredientes:[{qty:"1-2",item:"bolsa o bote de habas babi"},{qty:"1",item:"patata"},{qty:"1",item:"jamón serrano troceado"},{qty:"1",item:"diente de ajo"},{qty:"",item:"sal y aceite"}],pasos:["Si se usan habas congeladas de bolsa, meterlas con agua, sal y un chorrito de aceite en la olla exprés en el 2 de la válvula y el fuego al 9 de 9, hasta 10 minutos después de que suba la válvula.","Rehogar las habas con las patatas fritas en trozos, el ajo machacado y los trozos de jamón."]},
-  {titulo:"Albóndigas",cat:"Carnes",emoji:"🥩",img:"",ingredientes:[{qty:"1 kg",item:"carne picada"},{qty:"1",item:"huevo"},{qty:"1",item:"trozo de miga de pan de 6-8 cm"},{qty:"1 vaso",item:"harina (para formar las bolas)"},{qty:"2",item:"cebollas"},{qty:"3",item:"zanahorias"},{qty:"2 cdas",item:"tomate"},{qty:"1 vaso",item:"vino blanco"},{qty:"",item:"sal, pimienta y leche"}],pasos:["Mezclar la carne picada, el huevo, la miga de pan, sal y pimienta. La miga mojada en leche.","Poner harina en el fondo de un vaso para hacer las bolas.","Freír las albóndigas en aceite y pasar a una cazuela.","En ese mismo aceite, hacer una salsa española y mezclar con las albóndigas."]},
-  {titulo:"Rollo Julio",cat:"Carnes",emoji:"🍗",img:"",ingredientes:[{qty:"600 g",item:"pechuga de pollo picada"},{qty:"150 g",item:"jamón serrano picado"},{qty:"1",item:"pastilla de caldo de carne"},{qty:"½ bolsa",item:"ciruelas pasas (100 g)"},{qty:"1 copa",item:"coñac"}],pasos:["Precalentar el horno a 200°.","Mezclar todos los ingredientes y extender en papel de aluminio.","Enrollar en forma de cilindro y meter en el horno con aire arriba y abajo durante 20 minutos.","Meter un vaso con agua para que no se seque.","Cuando al pinchar con una varilla salga limpia, sacar del horno.","Se puede comer caliente o meter en nevera y comer frío acompañado de salsa rosa."]},
-  {titulo:"Tarta de Manzana",cat:"Postres",emoji:"🍎",img:"",ingredientes:[{qty:"5",item:"manzanas reineta Chantecker"},{qty:"110 g",item:"mantequilla"},{qty:"220 g",item:"azúcar"},{qty:"1",item:"hojaldre redondo"}],pasos:["Poner la mantequilla y el azúcar en el molde a derretir en el fuego.","Pelar y quitar el corazón a las manzanas, cortándolas en 4 gajos.","Ponerlas en el molde con el corazón hacia arriba.","Dejar hacer unos 20 minutos a fuego medio.","Poner el hojaldre encima. Lo que sobre, doblarlo hacia adentro.","Meterlo en el horno a 180° hasta que esté dorado."]},
-  {titulo:"Porrusalda",cat:"Sopas y Cremas",emoji:"🧅",img:"",ingredientes:[{qty:"5",item:"patatas en trozos grandes"},{qty:"3",item:"puerros en trozos"},{qty:"1",item:"cebolla muy picada"},{qty:"1 trozo",item:"calabaza"},{qty:"",item:"sal"}],pasos:["Sofreír la cebolla.","Echar el resto de verduras y cubrir con agua fría.","Echar sal.","Hervir durante 30 minutos aproximadamente.","Probar las patatas para saber si están hechas."]},
-  {titulo:"Patatas Panadera",cat:"Verduras y Guarniciones",emoji:"🥔",img:"",ingredientes:[{qty:"4",item:"patatas grandes"},{qty:"1",item:"cebolla"},{qty:"",item:"mantequilla, aceite y sal"}],pasos:["Cortar las patatas en rodajas y la cebolla en juliana.","Sofreír con poco aceite en una sartén unos 15 minutos.","Ponerlas en una fuente de horno con mantequilla, tapadas con papel de aluminio.","Meterlas en el horno a 180° durante 30 minutos."]},
-  {titulo:"Tomates al Horno",cat:"Verduras y Guarniciones",emoji:"🍅",img:"",ingredientes:[{qty:"4",item:"tomates cortados por el ecuador"},{qty:"1",item:"ajo picado"},{qty:"",item:"sal, aceite y pan rallado (opcional)"}],pasos:["Cortar los tomates por el medio y poner sal, aceite, ajo picado y pan rallado si se quiere.","Ponerlos en una fuente y meterlos al horno a 180° durante 30 minutos."]},
-  {titulo:"Carrilleras",cat:"Carnes",emoji:"🍷",img:"",ingredientes:[{qty:"15",item:"carrilleras"},{qty:"4",item:"cebollas muy picadas"},{qty:"½",item:"puerro muy picado"},{qty:"1 l",item:"vino tinto"},{qty:"1",item:"pastilla Starlux"},{qty:"1 cda",item:"Bovril colmada"}],pasos:["Freír las carrilleras a fuego fuerte (9) para marcarlas y apartar.","Sofreír la cebolla y el puerro a fuego muy bajo (3/9) durante 25 minutos en la olla exprés sin tapar.","Echar las carrilleras y cubrir con vino tinto. Añadir la pastilla de Starlux y la cucharada de Bovril.","Tapar la olla, poner la válvula en el 2 y el fuego al 9.","Cuando suba, bajar al 4 de 9. En total tenerlo 20 minutos.","Retirar y cuando se vaya la presión, sacar las carrilleras.","Pasar la salsa por la batidora o el chino. Debe quedar caldoso.","Echar las carrilleras y hervir hasta que la salsa engorde a fuego medio (4/9)."]},
-  {titulo:"Quiche de Espinacas y Setas",cat:"Otros",emoji:"🥧",img:"",ingredientes:[{qty:"2 bolsas",item:"espinacas congeladas"},{qty:"4",item:"huevos"},{qty:"2 bandejas",item:"setas pequeñas"},{qty:"2",item:"pasta brisa"},{qty:"1",item:"diente de ajo"}],pasos:["Cocer las espinacas hirviendo unos 2 minutos hasta descongelarlas.","Sofreír las setas con el ajo, que luego se retira.","Batir los huevos y mezclar todo.","Poner la pasta brisa cubriendo los moldes con su papel y legumbres encima para hacer peso. Meter en el horno 10 minutos.","Sacar, retirar las legumbres y rellenar con la mezcla.","Meter en el horno otros 15 minutos hasta que cuaje el huevo."]},
-  {titulo:"Pescado al Horno",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1½",item:"pescado (abierto)"},{qty:"1",item:"cebolla"},{qty:"3",item:"patatas"},{qty:"2",item:"tomates"},{qty:"",item:"aceite y sal"}],pasos:["Cortar la cebolla en juliana y las patatas en rodajas finas.","Freírlo todo en la sartén o en la freidora.","Poner todo de base en una fuente de horno y añadir los tomates en rodajas de un dedo de grosor.","Poner encima el pescado abierto con aceite y sal.","Meter en el horno a 180°, arriba, abajo y aire, unos 15 minutos."]},
-  {titulo:"Sopa de Ajo",cat:"Sopas y Cremas",emoji:"🧄",img:"",ingredientes:[{qty:"5",item:"dientes de ajo"},{qty:"150 g",item:"pan (cortezas)"},{qty:"1½ l",item:"caldo"},{qty:"2",item:"pastillas de caldo de carne"},{qty:"1 cda",item:"pimentón dulce"},{qty:"1",item:"cayena"},{qty:"1",item:"huevo por persona"}],pasos:["Tostar el pan y trocearlo.","Sofreír en una cazuela el ajo hasta dorarlo.","Añadir el pan y sofreír, añadiendo pimentón dulce.","Añadir el caldo y remover con varillas.","Dejar cocer 30 minutos removiendo de vez en cuando.","Antes de servir, con la sopa hirviendo, añadir un huevo por persona.","Nota: con los ajos se puede añadir una cayena."]},
-  {titulo:"Arroz en su Tinta",cat:"Arroces",emoji:"🍚",img:"",ingredientes:[{qty:"3 vasos",item:"arroz"},{qty:"6½ vasos",item:"agua"},{qty:"2",item:"dientes de ajo"},{qty:"1",item:"pastilla de caldo de carne o pescado"}],pasos:["En una cazuela rehogar los ajos.","Añadir el arroz y seguir rehogando un par de minutos.","Calentar el agua con la pastilla de caldo en el microondas.","Añadir el caldo al arroz y echar sal.","No remover y dejar hacer a fuego medio durante 20 minutos exactos.","Retirar y dejar tapado 10 minutos."]},
-  {titulo:"Txipirones en su Tinta",cat:"Pescados y Mariscos",emoji:"🦑",img:"",ingredientes:[{qty:"1 kg",item:"begi-haundi (pota grande) limpio"},{qty:"½ kg",item:"cebollas rojas"},{qty:"½ kg",item:"cebollas blancas"},{qty:"2",item:"dientes de ajo"},{qty:"2 cdas",item:"tomate"},{qty:"",item:"perejil, sal y tinta"}],pasos:["Poner en la olla exprés un fondo de aceite.","Picar las cebollas. Trocear el begihandi en 6 trozos grandes.","Echar en la olla capas alternas de cebolla y begihandi.","Añadir el tomate, los ajos, el perejil y la sal.","Cerrar la olla con la válvula en el 2 y el fuego al máximo (9).","Cuando suba la válvula, bajar al 7 y esperar 1 minuto. Retirar del fuego.","Cuando se pueda abrir, comprobar que el begihandi está hecho.","Sacar los trozos, cortarlos pequeños y reservar.","Retirar el líquido y guardarlo.","Poner la olla sin tapa al 7 y cocinar la cebolla hasta que esté seca.","Pasarla por el pasapurés, poniendo primero la tinta en el fondo.","Añadir el líquido de cocción al gusto para regular el espesor.","Añadir los trozos de begihandi y calentar antes de servir."]},
-  {titulo:"Pollo a la Cerveza",cat:"Carnes",emoji:"🍺",img:"",ingredientes:[{qty:"1",item:"pollo entero"},{qty:"1 lata",item:"cerveza"},{qty:"",item:"sal, pimienta y salsa soja"}],pasos:["Salpimentar el pollo y untar con aceite.","Echar media lata de cerveza.","Meter en el horno 45 minutos a 180° sin grill.","Sacar, dar la vuelta y echar la otra mitad de la cerveza. Otros 45 minutos.","Sacar, dar la vuelta y echar un chorro de soja. Otros 15 minutos.","Sacar, dar la vuelta y echar otro chorro de soja. Otros 15 minutos.","Sacar y servir."]},
-  {titulo:"Ensaladilla Rusa",cat:"Otros",emoji:"🥗",img:"",ingredientes:[{qty:"1",item:"patata mediana por persona"},{qty:"1 lata",item:"bonito (para 4 patatas)"},{qty:"2",item:"zanahorias"},{qty:"2 huevos",item:"para la mayonesa casera"}],pasos:["Cocer las patatas (sin pelar) y las zanahorias (peladas).","Pelar y trocear las patatas en cubitos de 1 cm.","Trocear las zanahorias muy pequeñas.","Mezclar el bonito con las patatas todavía calientes para que absorban bien el aceite y el sabor.","Hacer mayonesa con dos huevos para que salga bastante líquida.","Mezclar todo y refrigerar."]},
-  {titulo:"Lomo con Bovril",cat:"Carnes",emoji:"🐷",img:"",ingredientes:[{qty:"1 kg",item:"lomo de cerdo"},{qty:"1 lata (25 cl)",item:"cerveza"},{qty:"4",item:"dientes de ajo"},{qty:"",item:"Bovril, aceite, sal y pimienta"}],pasos:["Salpimentar el lomo.","Embadurnar el lomo con Bovril.","Ponerlo en una fuente con un chorro de aceite, la cerveza y los 4 dientes de ajo.","Meterlo en el horno 50 minutos a 200°, arriba y abajo, sin aire."]},
-  {titulo:"Gazpacho",cat:"Sopas y Cremas",emoji:"🍅",img:"",ingredientes:[{qty:"1,5 kg",item:"tomates (antes de pelar)"},{qty:"6 cdas",item:"aceite de oliva virgen"},{qty:"3 cdas",item:"vinagre"},{qty:"1 cdta",item:"sal gruesa rasa"},{qty:"50 g",item:"pan de barra"}],pasos:["Meter todo en la trituradora.","Si no se ha pelado antes el tomate, después de triturar, colar."]},
-  {titulo:"Lasaña de Verduras",cat:"Verduras y Guarniciones",emoji:"🫑",img:"",ingredientes:[{qty:"",item:"calabacín"},{qty:"",item:"berenjena"},{qty:"",item:"cebolla dulce"},{qty:"",item:"pimiento verde y rojo"},{qty:"",item:"placas de lasaña (directa al horno)"},{qty:"",item:"nata espesa"},{qty:"",item:"queso rallado"},{qty:"",item:"salsa de tomate frito"}],pasos:["Hacer la verdura en rodajas pequeñas y el calabacín y berenjena en tacos.","Rehogar cebolla y pimientos con un poco de sal, luego añadir el resto y el tomate. Hacer mucho sofrito.","Montar sofrito, luego las placas de lasaña, y al terminar repartir la nata y poner el queso rallado.","Meter directa al horno. Si no se hace al momento, las placas se quedan duras."]},
-  {titulo:"Patatas a la Riojana",cat:"Verduras y Guarniciones",emoji:"🌶️",img:"",ingredientes:[{qty:"4",item:"patatas"},{qty:"1",item:"chorizo fresco"},{qty:"1",item:"pimiento de color"},{qty:"1",item:"pimiento choricero"},{qty:"1",item:"cebolla"},{qty:"10 g",item:"pimentón de la Vera"},{qty:"10 ml",item:"aceite de oliva virgen extra"},{qty:"",item:"sal"}],pasos:["En una cazuela poner aceite y dorar la cebolla en cuadraditos y el pimiento partido.","Añadir el chorizo sin piel en rodajas.","Incorporar las patatas chascadas y el pimentón.","Cubrir con agua y añadir el pimiento choricero.","Cocer a fuego medio unos 40 minutos hasta que las patatas estén tiernas.","Corregir de sal y servir."]},
-  {titulo:"Vainas con Patatas",cat:"Verduras y Guarniciones",emoji:"🫛",img:"",ingredientes:[{qty:"1 kg",item:"vainas (judías verdes)"},{qty:"2",item:"patatas grandes"},{qty:"",item:"agua y sal"}],pasos:["Meter las vainas y las patatas peladas y cortadas por la mitad en la olla exprés. Poner agua hasta cubrir y echar sal.","Poner la olla en el 2 de la válvula y el fuego en el 9 de 9 hasta que suba o suene fuerte.","Dejar otros 2 minutos con el fuego al 5.","Apagar y retirar. Abrir cuando se enfríe, sacando antes toda la presión."]},
-  {titulo:"Salsa Española",cat:"Salsas y Bases",emoji:"🫙",img:"",ingredientes:[{qty:"2",item:"cebollas grandes"},{qty:"1",item:"puerro"},{qty:"1",item:"zanahoria"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"diente de ajo"},{qty:"1 cdta",item:"sal rasa"},{qty:"1 chorro",item:"tomate en salsa"},{qty:"1 copa",item:"coñac"},{qty:"",item:"caldo de carne si hace falta"}],pasos:["Sofreír las cebollas con sal hasta que estén muy doradas.","Añadir el puerro, la zanahoria y el pimiento verde a mitad del proceso.","Añadir una copa de coñac.","Añadir salsa de tomate.","Cuando todo esté hecho, añadir caldo de carne si hace falta y pasar por el pasapurés."]},
-  {titulo:"Arroz con Leche",cat:"Postres",emoji:"🥛",img:"",ingredientes:[{qty:"500 ml",item:"leche fría de nevera"},{qty:"50 g",item:"arroz"},{qty:"40 g",item:"azúcar"},{qty:"2 trozos",item:"piel de limón (solo lo amarillo)"}],pasos:["Poner en un cazo la leche fría, el arroz y los trozos de piel de limón.","Poner el fuego al 5/9 y remover constantemente.","Cuando empieza a hervir, mantener durante 25 minutos.","Cuando vaya espesando, bajar el fuego (primero al 4 y luego al 3).","Al final añadir el azúcar y tener otros 4-5 minutos."]},
-  {titulo:"Salsa de Tomate",cat:"Salsas y Bases",emoji:"🍅",img:"",ingredientes:[{qty:"2 latas (1 kg)",item:"tomate triturado"},{qty:"2",item:"cebollas grandes"},{qty:"1",item:"diente de ajo"},{qty:"1 cdta",item:"sal rasa"},{qty:"1 cda",item:"azúcar colmada"},{qty:"",item:"aceite de oliva"}],pasos:["Poner aceite en la sartén como para freír un filete.","Picar la cebolla y dorarla a fuego lento con sal para que no se queme.","Echar el tomate y dejarlo ½ hora a fuego lento.","Añadir el azúcar.","Pasar por el chino."]},
-  {titulo:"Marmitako",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1 kg",item:"pescado (bonito o atún)"},{qty:"1",item:"cebolla"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"pimiento rojo"},{qty:"1 chorro",item:"salsa de tomate"},{qty:"1",item:"vino blanco"},{qty:"1",item:"diente de ajo"},{qty:"4",item:"patatas grandes"},{qty:"",item:"pimiento choricero y caldo de pescado"}],pasos:["Sofreír la cebolla, los pimientos y el ajo.","Añadir las patatas cortadas en trozos.","Sofreír y añadir pimiento choricero.","Añadir caldo de pescado.","En el último minuto, añadir el pescado en trozos.","Corregir de sal."]},
-  {titulo:"Bechamel",cat:"Salsas y Bases",emoji:"🥛",img:"",ingredientes:[{qty:"2 cdas",item:"harina colmadas"},{qty:"½ l",item:"leche caliente"},{qty:"1 chorro",item:"aceite"},{qty:"",item:"sal"}],pasos:["Freír la harina revolviendo con las varillas.","Echar la leche caliente poco a poco sin dejar de revolver.","Seguir cociendo sin que hierva hasta que tenga el espesor deseado (engordará al enfriarse).","Corregir de sal."]},
-  {titulo:"Lentejas",cat:"Legumbres",emoji:"🫘",img:"",ingredientes:[{qty:"1 vaso",item:"lentejas pardinas"},{qty:"½",item:"pimiento verde"},{qty:"2",item:"zanahorias en trozos grandes"},{qty:"1",item:"cebolla entera"},{qty:"1",item:"puerro"},{qty:"1",item:"patata grande"},{qty:"5 vasos",item:"agua"},{qty:"1 cdta",item:"pimentón dulce (sofrito)"},{qty:"2",item:"dientes de ajo (sofrito)"}],pasos:["Meter todo menos el pimentón y los ajos en la olla exprés con el 2 en la válvula. Cerrar.","Poner el fuego al 9 de 9 y cuando suba la presión, bajar al 5 durante 15 minutos.","Apagar y dejar hasta que se vaya la presión.","Abrir y sacar la verdura (salvo la zanahoria), batirla e incorporarla para engordar el caldo.","Sofrito: sofreír los ajos, quitarlos dorados, apagar el fuego, añadir pimentón dulce y revolver.","Añadir el sofrito a las lentejas y servir."]},
-  {titulo:"Bizcocho de Yogur",cat:"Postres",emoji:"🍋",img:"",ingredientes:[{qty:"1",item:"yogur natural (su vaso es la medida)"},{qty:"1 sobre",item:"levadura Royal"},{qty:"1 medida",item:"aceite de girasol"},{qty:"2 medidas",item:"azúcar"},{qty:"3 medidas",item:"harina"},{qty:"3",item:"huevos"},{qty:"½",item:"zumo de limón y su ralladura"},{qty:"½",item:"zumo de naranja y su ralladura"},{qty:"1 pizca",item:"sal"}],pasos:["Colocar todos los ingredientes en un recipiente y batir con la batidora.","Calentar el horno arriba y abajo a 180°.","Colocar el molde en la parte de abajo del horno (abajo del todo).","No abrir en 30 minutos y tenerlo en total unos 45 minutos."]},
-  {titulo:"Salmorejo",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1 bote (1 kg)",item:"tomate entero pelado"},{qty:"3 rebanadas",item:"pan sin corteza"},{qty:"1",item:"diente de ajo mediano"},{qty:"1 cda",item:"vinagre"},{qty:"1 cdta",item:"sal"},{qty:"100 ml",item:"aceite de oliva"}],pasos:["Triturarlo todo.","Ir corrigiendo de sal, vinagre y aceite al gusto."]},
-  {titulo:"Arroz con Almejas",cat:"Arroces",emoji:"🐚",img:"",ingredientes:[{qty:"1 bolsa",item:"almejas"},{qty:"3 vasos",item:"arroz"},{qty:"7 vasos",item:"caldo de pescado"},{qty:"2+2",item:"dientes de ajo"},{qty:"1 vaso",item:"vino blanco"},{qty:"1 cda",item:"harina"}],pasos:["Lavar las almejas dejándolas en agua con sal al menos 2 horas.","Sofreír 2 dientes de ajo y añadir las almejas con el vino blanco.","Añadir una cucharada de harina y sofreír hasta que se abran las almejas. Retirarlas y quitar las cerradas.","Hacer un arroz blanco con el caldo de pescado y los otros 2 dientes de ajo.","Incorporar las almejas al arroz al final de la cocción."]}
-];
+let recetas=[],misListas=[],listasPublicas=[];
+let activeCat="Todas",searchTerm="",currentUser=null;
+let currentRecetaId=null,editingRecetaId=null,currentListaId=null,editingListaId=null;
+let currentImgData="",confirmCb=null,firstLoad=true;
+let unsubListas=null,unsubPublicas=null;
 
-// ─── ESTADO ───
-let recetas = [];
-let activeCat = "Todas";
-let searchTerm = "";
-let currentId = null;
-let editingId = null;
-let pendingDeleteId = null;
-let currentImgData = "";
-let firstLoad = true;
-
-// ─── FIREBASE: LISTENER EN TIEMPO REAL ───
-colRef.onSnapshot(snapshot => {
-  recetas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-    .sort((a,b) => a.titulo.localeCompare(b.titulo, 'es'));
-
-  if (firstLoad) {
-    firstLoad = false;
-    // Si la base de datos está vacía, cargar las recetas iniciales
-    if (recetas.length === 0) {
-      seedInitialData();
-      return;
-    }
-    hideSplash();
-  }
-
-  setSyncStatus("ok");
-  renderGrid();
-  renderCats();
-}, err => {
-  console.error(err);
-  setSyncStatus("error");
-  hideSplash();
-  showToast("⚠️ Error de conexión con Firebase");
-});
-
-async function seedInitialData() {
-  try {
-    const batch = db.batch();
-    RECETAS_INIT.forEach(r => {
-      batch.set(colRef.doc(), r);
-    });
-    await batch.commit();
-    // El listener onSnapshot actualizará automáticamente
-  } catch(e) {
-    console.error(e);
-    hideSplash();
-    showToast("⚠️ Error al cargar datos iniciales");
-  }
+// AUTH
+auth.onAuthStateChanged(u=>{currentUser=u;updateAuthUI();subscribeToListas();});
+function loginWithGoogle(){auth.signInWithPopup(provider).catch(()=>showToast("⚠️ Error al iniciar sesión"));}
+function logout(){closeUserMenu();auth.signOut();}
+function toggleUserMenu(){document.getElementById("userMenuOverlay").classList.toggle("open");}
+function closeUserMenu(){document.getElementById("userMenuOverlay").classList.remove("open");}
+function updateAuthUI(){
+  const av=document.getElementById("userAvatar"),bl=document.getElementById("btnLogin"),ba=document.getElementById("btnAddReceta"),mn=document.getElementById("userMenuName");
+  if(currentUser){
+    if(currentUser.photoURL){av.src=currentUser.photoURL;av.style.display="block";}else av.style.display="none";
+    bl.style.display="none";ba.style.display="block";
+    mn.innerHTML=`<div>${currentUser.displayName||'Usuario'}</div><div class="user-menu-email">${currentUser.email}</div>`;
+  }else{av.style.display="none";bl.style.display="flex";ba.style.display="none";}
+  renderMisListas();renderCompartidas();renderGrid();
 }
-
-function hideSplash() {
-  const s = document.getElementById("loadingScreen");
-  s.classList.add("hidden");
-  setTimeout(() => s.style.display = "none", 400);
-}
-
-function setSyncStatus(status) {
-  const dot = document.getElementById("syncDot");
-  dot.className = "sync-dot";
-  if (status === "syncing") dot.classList.add("syncing");
-  if (status === "error") dot.classList.add("error");
-}
-
-// ─── RENDER CATEGORÍAS ───
-function renderCats() {
-  const allCats = ["Todas", ...CATS];
-  document.getElementById("catsWrap").innerHTML = allCats.map(c =>
-    `<span class="cat-btn${c===activeCat?' active':''}" onclick="selectCat('${c}')">${c==='Todas'?'🍽️ Todas':(CAT_EMOJI[c]||'')+'&nbsp;'+c}</span>`
-  ).join('');
-}
-
-function selectCat(cat) { activeCat = cat; renderCats(); renderGrid(); }
-
-// ─── RENDER GRID ───
-function filterRecipes() { searchTerm = document.getElementById("searchInput").value.toLowerCase(); renderGrid(); }
-
-function getFiltered() {
-  return recetas.filter(r => {
-    const matchCat = activeCat === "Todas" || r.cat === activeCat;
-    const matchSearch = !searchTerm ||
-      r.titulo.toLowerCase().includes(searchTerm) ||
-      (r.ingredientes||[]).some(i => i.item.toLowerCase().includes(searchTerm));
-    return matchCat && matchSearch;
+function subscribeToListas(){
+  if(unsubListas)unsubListas();if(unsubPublicas)unsubPublicas();
+  if(currentUser){
+    unsubListas=db.collection("listas").where("propietarioId","==",currentUser.uid).onSnapshot(snap=>{misListas=snap.docs.map(d=>({id:d.id,...d.data()}));renderMisListas();});
+  }else{misListas=[];renderMisListas();}
+  unsubPublicas=db.collection("listas").where("esPublica","==",true).onSnapshot(snap=>{
+    listasPublicas=snap.docs.map(d=>({id:d.id,...d.data()})).filter(l=>!currentUser||l.propietarioId!==currentUser.uid);
+    renderCompartidas();
   });
 }
 
-function renderGrid() {
-  const filtered = getFiltered();
-  document.getElementById("subtitleCount").textContent = recetas.length + " recetas de familia";
-  document.getElementById("countBar").textContent = filtered.length + " receta" + (filtered.length!==1?"s":"");
-  if (!filtered.length) {
-    document.getElementById("grid").innerHTML = `<div class="no-results">😕<br>No se encontraron recetas</div>`;
-    return;
+// RECETAS
+const recetasRef=db.collection("recetas");
+recetasRef.onSnapshot(snap=>{
+  recetas=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.titulo.localeCompare(b.titulo,'es'));
+  if(firstLoad){firstLoad=false;if(recetas.length===0)seedData();else hideSplash();}
+  setSyncStatus("ok");renderGrid();renderCats();
+},()=>{setSyncStatus("error");hideSplash();});
+async function seedData(){const batch=db.batch();RECETAS_INIT.forEach(r=>batch.set(recetasRef.doc(),r));await batch.commit();}
+function hideSplash(){const s=document.getElementById("loadingScreen");s.classList.add("hidden");setTimeout(()=>s.style.display="none",400);}
+function setSyncStatus(s){const d=document.getElementById("syncDot");d.className="sync-dot"+(s==="syncing"?" syncing":s==="error"?" error":"");}
+
+// TABS
+function switchTab(tab){
+  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("tab-"+tab).classList.add("active");
+  document.getElementById("nav-"+tab).classList.add("active");
+  document.getElementById("searchBox").style.display=tab==="recetas"?"block":"none";
+}
+
+// RENDER RECETAS
+function filterRecipes(){searchTerm=document.getElementById("searchInput").value.toLowerCase();renderGrid();}
+function selectCat(cat){activeCat=cat;renderCats();renderGrid();}
+function renderCats(){
+  document.getElementById("catsWrap").innerHTML=["Todas",...CATS].map(c=>
+    `<span class="cat-btn${c===activeCat?" active":""}" onclick="selectCat('${c}')">${c==="Todas"?"🍽️ Todas":(CE[c]||"")+"&nbsp;"+c}</span>`).join("");
+}
+function renderGrid(){
+  const f=recetas.filter(r=>{
+    const mc=activeCat==="Todas"||r.cat===activeCat;
+    const ms=!searchTerm||r.titulo.toLowerCase().includes(searchTerm)||(r.ingredientes||[]).some(i=>i.item.toLowerCase().includes(searchTerm));
+    return mc&&ms;
+  });
+  document.getElementById("subtitleCount").textContent=recetas.length+" recetas";
+  document.getElementById("countBar").textContent=f.length+" receta"+(f.length!==1?"s":"");
+  document.getElementById("grid").innerHTML=f.length?f.map(r=>
+    `<div class="card" onclick="openView('${r.id}')">
+      ${r.img?`<div class="card-img"><img src="${r.img}" loading="lazy"></div>`:`<div class="card-img">${r.emoji||"🍽️"}</div>`}
+      <div class="card-body"><div class="card-title">${esc(r.titulo)}</div><div class="card-cat">${CE[r.cat]||""} ${r.cat}</div><div class="card-ing-count">${(r.ingredientes||[]).length} ingredientes</div></div>
+    </div>`).join(""):`<div class="no-results">😕<br>No se encontraron recetas</div>`;
+}
+
+// VER RECETA
+function openView(id){
+  const r=recetas.find(x=>x.id===id);if(!r)return;
+  currentRecetaId=id;
+  const isAuth=!!currentUser;
+  document.getElementById("btnEditReceta").style.display=isAuth?"flex":"none";
+  document.getElementById("btnDeleteReceta").style.display=isAuth?"flex":"none";
+  document.getElementById("btnAddToList").style.display=isAuth?"block":"none";
+  document.getElementById("mImg").innerHTML=r.img?`<img src="${r.img}" class="modal-recipe-img">`:"";
+  document.getElementById("mEmoji").textContent=r.emoji||"🍽️";
+  document.getElementById("mTitle").textContent=r.titulo;
+  document.getElementById("mCat").textContent=(CE[r.cat]||"")+" "+r.cat;
+  document.getElementById("mIngs").innerHTML=(r.ingredientes||[]).map(i=>`<li><span class="ing-qty">${esc(i.qty)}</span><span>${esc(i.item)}</span></li>`).join("");
+  document.getElementById("mSteps").innerHTML=(r.pasos||[]).map((p,i)=>`<li><span class="step-num">${i+1}</span>${esc(p)}</li>`).join("");
+  openOverlay("viewOverlay");
+}
+function closeViewModal(e){if(e.target===document.getElementById("viewOverlay"))closeViewBtn();}
+function closeViewBtn(){closeOverlay("viewOverlay");}
+function editCurrent(){closeViewBtn();openEditor(currentRecetaId);}
+function deleteCurrent(){showConfirm("🗑️ Eliminar receta","¿Seguro? No se puede deshacer.",async()=>{setSyncStatus("syncing");await recetasRef.doc(currentRecetaId).delete();closeViewBtn();showToast("🗑️ Receta eliminada");});}
+
+// EDITOR RECETA
+function openEditor(id){
+  if(!currentUser){showToast("Inicia sesión para editar");return;}
+  editingRecetaId=id;currentImgData="";
+  document.getElementById("editCat").innerHTML=CATS.map(c=>`<option value="${c}">${CE[c]||""} ${c}</option>`).join("");
+  if(id){
+    const r=recetas.find(x=>x.id===id);
+    document.getElementById("editorTitle").textContent="Editar Receta";
+    document.getElementById("editEmoji").value=r.emoji||"";document.getElementById("editTitulo").value=r.titulo;document.getElementById("editCat").value=r.cat;
+    currentImgData=r.img||"";
+    if(currentImgData){document.getElementById("imgPreview").src=currentImgData;document.getElementById("imgPreview").style.display="block";document.getElementById("imgUploadPlaceholder").style.display="none";document.getElementById("imgClearBtn").style.display="inline-block";}
+    else resetImgUI();
+    renderIngRows(r.ingredientes||[]);renderStepRows(r.pasos||[]);
+  }else{
+    document.getElementById("editorTitle").textContent="Nueva Receta";document.getElementById("editEmoji").value="🍽️";document.getElementById("editTitulo").value="";
+    resetImgUI();renderIngRows([{qty:"",item:""}]);renderStepRows([""]);
   }
-  document.getElementById("grid").innerHTML = filtered.map(r => {
-    const imgHtml = r.img
-      ? `<div class="card-img"><img src="${r.img}" alt="${escHtml(r.titulo)}" loading="lazy"></div>`
-      : `<div class="card-img">${r.emoji||'🍽️'}</div>`;
-    return `<div class="card" onclick="openView('${r.id}')">
-      ${imgHtml}
-      <div class="card-body">
-        <div class="card-title">${escHtml(r.titulo)}</div>
-        <div class="card-cat">${CAT_EMOJI[r.cat]||''} ${r.cat}</div>
-        <div class="card-ing-count">${(r.ingredientes||[]).length} ingredientes</div>
-      </div>
-    </div>`;
-  }).join('');
+  openOverlay("editorOverlay");
 }
-
-// ─── MODAL VER ───
-function openView(id) {
-  const r = recetas.find(x => x.id === id);
-  if (!r) return;
-  currentId = id;
-  document.getElementById("mImg").innerHTML = r.img
-    ? `<img src="${r.img}" class="modal-recipe-img" alt="${escHtml(r.titulo)}">`
-    : "";
-  document.getElementById("mEmoji").textContent = r.emoji||'🍽️';
-  document.getElementById("mTitle").textContent = r.titulo;
-  document.getElementById("mCat").textContent = (CAT_EMOJI[r.cat]||'') + ' ' + r.cat;
-  document.getElementById("mIngs").innerHTML = (r.ingredientes||[]).map(i =>
-    `<li><span class="ing-qty">${escHtml(i.qty)}</span><span>${escHtml(i.item)}</span></li>`
-  ).join('');
-  document.getElementById("mSteps").innerHTML = (r.pasos||[]).map((p,i) =>
-    `<li><span class="step-num">${i+1}</span>${escHtml(p)}</li>`
-  ).join('');
-  document.getElementById("viewOverlay").classList.add("open");
-  document.body.style.overflow = "hidden";
-}
-
-function closeViewModal(e) { if (e.target===document.getElementById("viewOverlay")) closeViewBtn(); }
-function closeViewBtn() { document.getElementById("viewOverlay").classList.remove("open"); document.body.style.overflow=""; }
-function editCurrent() { closeViewBtn(); openEditor(currentId); }
-function deleteCurrent() { pendingDeleteId = currentId; document.getElementById("confirmOverlay").classList.add("open"); }
-
-// ─── ELIMINAR ───
-function closeConfirm() { document.getElementById("confirmOverlay").classList.remove("open"); pendingDeleteId = null; }
-async function confirmDelete() {
-  if (!pendingDeleteId) return;
-  try {
-    setSyncStatus("syncing");
-    await colRef.doc(pendingDeleteId).delete();
-    closeConfirm();
-    closeViewBtn();
-    showToast("🗑️ Receta eliminada");
-  } catch(e) {
-    showToast("⚠️ Error al eliminar");
-    setSyncStatus("error");
-  }
-}
-
-// ─── EDITOR ───
-function openEditor(id) {
-  editingId = id;
-  currentImgData = "";
-  document.getElementById("editCat").innerHTML = CATS.map(c =>
-    `<option value="${c}">${CAT_EMOJI[c]||''} ${c}</option>`
-  ).join('');
-
-  if (id) {
-    const r = recetas.find(x => x.id === id);
-    document.getElementById("editorTitle").textContent = "Editar Receta";
-    document.getElementById("editEmoji").value = r.emoji||'';
-    document.getElementById("editTitulo").value = r.titulo;
-    document.getElementById("editCat").value = r.cat;
-    currentImgData = r.img||"";
-    if (currentImgData) {
-      document.getElementById("imgPreview").src = currentImgData;
-      document.getElementById("imgPreview").style.display = "block";
-      document.getElementById("imgUploadPlaceholder").style.display = "none";
-      document.getElementById("imgClearBtn").style.display = "inline-block";
-    } else { resetImgUI(); }
-    renderIngRows(r.ingredientes||[]);
-    renderStepRows(r.pasos||[]);
-  } else {
-    document.getElementById("editorTitle").textContent = "Nueva Receta";
-    document.getElementById("editEmoji").value = "🍽️";
-    document.getElementById("editTitulo").value = "";
-    resetImgUI();
-    renderIngRows([{qty:"",item:""}]);
-    renderStepRows([""]);
-  }
-  document.getElementById("editorOverlay").classList.add("open");
-  document.body.style.overflow = "hidden";
-}
-
-function closeEditor() {
-  document.getElementById("editorOverlay").classList.remove("open");
-  document.body.style.overflow = "";
-  document.getElementById("imgFileInput").value = "";
-}
-
-function resetImgUI() {
-  document.getElementById("imgPreview").style.display = "none";
-  document.getElementById("imgPreview").src = "";
-  document.getElementById("imgUploadPlaceholder").style.display = "block";
-  document.getElementById("imgClearBtn").style.display = "none";
-}
-
-function handleImageUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const MAX = 800;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h*MAX/w); w = MAX; }
-        else { w = Math.round(w*MAX/h); h = MAX; }
-      }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      currentImgData = canvas.toDataURL("image/jpeg", 0.72);
-      document.getElementById("imgPreview").src = currentImgData;
-      document.getElementById("imgPreview").style.display = "block";
-      document.getElementById("imgUploadPlaceholder").style.display = "none";
-      document.getElementById("imgClearBtn").style.display = "inline-block";
-    };
-    img.src = ev.target.result;
-  };
+function closeEditor(){closeOverlay("editorOverlay");document.getElementById("imgFileInput").value="";}
+function resetImgUI(){document.getElementById("imgPreview").style.display="none";document.getElementById("imgUploadPlaceholder").style.display="block";document.getElementById("imgClearBtn").style.display="none";}
+function handleImageUpload(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas"),MAX=800;let w=img.width,h=img.height;if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);currentImgData=c.toDataURL("image/jpeg",0.72);document.getElementById("imgPreview").src=currentImgData;document.getElementById("imgPreview").style.display="block";document.getElementById("imgUploadPlaceholder").style.display="none";document.getElementById("imgClearBtn").style.display="inline-block";};img.src=ev.target.result;};
   reader.readAsDataURL(file);
 }
-
-function clearImage() {
-  currentImgData = "";
-  document.getElementById("imgFileInput").value = "";
-  resetImgUI();
+function clearImage(){currentImgData="";document.getElementById("imgFileInput").value="";resetImgUI();}
+function renderIngRows(ings){document.getElementById("ingsContainer").innerHTML="";ings.forEach(i=>addIngRowWith(i.qty,i.item));}
+function addIngRow(){addIngRowWith("","");}
+function addIngRowWith(qty,item){const c=document.getElementById("ingsContainer"),d=document.createElement("div");d.className="ing-row";d.innerHTML=`<input type="text" class="field-input ing-qty-input" placeholder="Cant." value="${esc(qty)}"><input type="text" class="field-input" placeholder="Ingrediente" value="${esc(item)}"><button class="btn-remove" onclick="removeRow(this)">✕</button>`;c.appendChild(d);}
+function renderStepRows(pasos){document.getElementById("stepsContainer").innerHTML="";pasos.forEach((p,i)=>addStepRowWith(p,i+1));}
+function addStepRow(){const c=document.getElementById("stepsContainer");addStepRowWith("",c.children.length+1);}
+function addStepRowWith(text,num){const c=document.getElementById("stepsContainer"),d=document.createElement("div");d.className="step-row";d.innerHTML=`<div class="step-idx">${num}</div><textarea class="field-input" placeholder="Describe el paso...">${esc(text)}</textarea><button class="btn-remove" onclick="removeRow(this)">✕</button>`;c.appendChild(d);updateStepNums();}
+function removeRow(btn){btn.parentElement.remove();updateStepNums();}
+function updateStepNums(){document.querySelectorAll("#stepsContainer .step-idx").forEach((el,i)=>el.textContent=i+1);}
+async function saveRecipe(){
+  const titulo=document.getElementById("editTitulo").value.trim();if(!titulo){showToast("⚠️ El nombre es obligatorio");return;}
+  const data={titulo,cat:document.getElementById("editCat").value,emoji:document.getElementById("editEmoji").value.trim()||"🍽️",img:currentImgData,
+    ingredientes:Array.from(document.querySelectorAll("#ingsContainer .ing-row")).map(row=>({qty:row.querySelector(".ing-qty-input").value.trim(),item:row.querySelectorAll("input")[1].value.trim()})).filter(i=>i.item),
+    pasos:Array.from(document.querySelectorAll("#stepsContainer textarea")).map(t=>t.value.trim()).filter(Boolean)};
+  const btn=document.getElementById("btnSave");btn.disabled=true;btn.textContent="Guardando…";setSyncStatus("syncing");
+  try{if(editingRecetaId)await recetasRef.doc(editingRecetaId).update(data);else await recetasRef.add(data);closeEditor();showToast(editingRecetaId?"✅ Receta actualizada":"✅ Receta añadida");}
+  catch(e){showToast("⚠️ Error al guardar");setSyncStatus("error");}
+  finally{btn.disabled=false;btn.innerHTML="💾 Guardar";}
 }
 
-function renderIngRows(ings) {
-  document.getElementById("ingsContainer").innerHTML = "";
-  ings.forEach(ing => addIngRowWith(ing.qty, ing.item));
+// LISTAS RENDER
+function renderMisListas(){
+  const el=document.getElementById("misListasContent");
+  if(!currentUser){el.innerHTML=`<div class="login-prompt"><h3>🔒 Área privada</h3><p>Inicia sesión para crear tus propias listas de recetas favoritas y generar listas de la compra.</p><button class="btn-google" onclick="loginWithGoogle()"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Entrar con Google</button></div>`;return;}
+  el.innerHTML=`<div class="lists-header"><h2>Mis listas</h2><button class="btn-new-list" onclick="openListaEditor(null)">＋ Nueva lista</button></div>`+
+    (misListas.length?misListas.map(l=>renderListaCard(l,true)).join(""):`<div class="empty-state"><div class="empty-icon">📋</div><p>Aún no tienes listas.<br>Crea una para organizar tus recetas favoritas.</p><button class="btn-new-list" onclick="openListaEditor(null)">＋ Crear mi primera lista</button></div>`);
 }
-function addIngRow() { addIngRowWith("",""); }
-function addIngRowWith(qty, item) {
-  const c = document.getElementById("ingsContainer");
-  const div = document.createElement("div");
-  div.className = "ing-row";
-  div.innerHTML = `<input type="text" class="field-input ing-qty-input" placeholder="Cant." value="${escHtml(qty)}">
-    <input type="text" class="field-input" placeholder="Ingrediente" value="${escHtml(item)}">
-    <button class="btn-remove" onclick="removeRow(this)">✕</button>`;
-  c.appendChild(div);
+function renderCompartidas(){
+  document.getElementById("compartidasContent").innerHTML=`<div class="lists-header"><h2>Listas compartidas</h2></div>`+
+    (listasPublicas.length?listasPublicas.map(l=>renderListaCard(l,false)).join(""):`<div class="empty-state"><div class="empty-icon">🌍</div><p>No hay listas públicas todavía.</p></div>`);
 }
-
-function renderStepRows(pasos) {
-  document.getElementById("stepsContainer").innerHTML = "";
-  pasos.forEach((p,i) => addStepRowWith(p, i+1));
-}
-function addStepRow() {
-  const c = document.getElementById("stepsContainer");
-  addStepRowWith("", c.children.length+1);
-}
-function addStepRowWith(text, num) {
-  const c = document.getElementById("stepsContainer");
-  const div = document.createElement("div");
-  div.className = "step-row";
-  div.innerHTML = `<div class="step-idx">${num}</div>
-    <textarea class="field-input" placeholder="Describe el paso...">${escHtml(text)}</textarea>
-    <button class="btn-remove" onclick="removeRow(this)">✕</button>`;
-  c.appendChild(div);
-  updateStepNums();
-}
-function removeRow(btn) { btn.parentElement.remove(); updateStepNums(); }
-function updateStepNums() {
-  document.querySelectorAll("#stepsContainer .step-idx").forEach((el,i) => el.textContent = i+1);
+function renderListaCard(l,isMine){
+  const rl=(l.recetas||[]).map(id=>recetas.find(r=>r.id===id)).filter(Boolean);
+  const chips=rl.slice(0,4).map(r=>`<span class="preview-chip">${r.emoji||"🍽️"} ${r.titulo}</span>`).join("");
+  const extra=rl.length>4?`<span class="preview-chip">+${rl.length-4} más</span>`:"";
+  return `<div class="lista-card">
+    <div class="lista-card-header" onclick="openListaDetail('${l.id}')">
+      <div class="lista-card-title">${esc(l.nombre)} <span class="lista-badge ${l.esPublica?"badge-publica":"badge-privada"}">${l.esPublica?"🌍 Pública":"🔒 Privada"}</span></div>
+      <div class="lista-card-meta">${rl.length} receta${rl.length!==1?"s":""} · ${l.propietarioNombre||"Anónimo"}</div>
+    </div>
+    ${rl.length?`<div class="lista-recetas-preview">${chips}${extra}</div>`:""}
+    <div class="lista-card-actions">
+      <button class="btn-sm btn-sm-green" onclick="openListaDetail('${l.id}')">🛒 Ver lista</button>
+      ${isMine?`<button class="btn-sm btn-sm-outline" onclick="openListaEditor('${l.id}')">✏️ Editar</button><button class="btn-sm btn-sm-red" onclick="confirmDeleteLista('${l.id}')">🗑️</button>`:""}
+    </div>
+  </div>`;
 }
 
-async function saveRecipe() {
-  const titulo = document.getElementById("editTitulo").value.trim();
-  if (!titulo) { showToast("⚠️ El nombre es obligatorio"); return; }
+// EDITOR LISTA
+function openListaEditor(id){
+  if(!currentUser){showToast("Inicia sesión primero");return;}
+  editingListaId=id;
+  if(id){const l=misListas.find(x=>x.id===id);document.getElementById("listaEditorTitle").textContent="Editar lista";document.getElementById("listaNombre").value=l.nombre||"";document.getElementById("listaPublica").checked=l.esPublica||false;}
+  else{document.getElementById("listaEditorTitle").textContent="Nueva lista";document.getElementById("listaNombre").value="";document.getElementById("listaPublica").checked=false;}
+  openOverlay("listaEditorOverlay");
+}
+function closeListaEditorModal(e){if(e.target===document.getElementById("listaEditorOverlay"))closeListaEditorBtn();}
+function closeListaEditorBtn(){closeOverlay("listaEditorOverlay");}
+async function saveLista(){
+  const nombre=document.getElementById("listaNombre").value.trim();if(!nombre){showToast("⚠️ Escribe un nombre");return;}
+  const data={nombre,esPublica:document.getElementById("listaPublica").checked,propietarioId:currentUser.uid,propietarioNombre:currentUser.displayName||"Usuario"};
+  try{if(editingListaId)await db.collection("listas").doc(editingListaId).update(data);else{data.recetas=[];await db.collection("listas").add(data);}closeListaEditorBtn();showToast(editingListaId?"✅ Lista actualizada":"✅ Lista creada");}
+  catch(e){showToast("⚠️ Error al guardar");}
+}
+function confirmDeleteLista(id){showConfirm("🗑️ Eliminar lista","¿Seguro que quieres eliminar esta lista?",async()=>{await db.collection("listas").doc(id).delete();showToast("🗑️ Lista eliminada");});}
 
-  const data = {
-    titulo,
-    cat: document.getElementById("editCat").value,
-    emoji: document.getElementById("editEmoji").value.trim() || "🍽️",
-    img: currentImgData,
-    ingredientes: Array.from(document.querySelectorAll("#ingsContainer .ing-row")).map(row => ({
-      qty: row.querySelector(".ing-qty-input").value.trim(),
-      item: row.querySelectorAll("input")[1].value.trim()
-    })).filter(i => i.item),
-    pasos: Array.from(document.querySelectorAll("#stepsContainer textarea")).map(t => t.value.trim()).filter(Boolean)
-  };
-
-  const btn = document.getElementById("btnSave");
-  btn.disabled = true;
-  btn.textContent = "Guardando…";
-  setSyncStatus("syncing");
-
-  try {
-    if (editingId) {
-      await colRef.doc(editingId).update(data);
-    } else {
-      await colRef.add(data);
-    }
-    closeEditor();
-    showToast(editingId ? "✅ Receta actualizada" : "✅ Receta añadida");
-  } catch(e) {
-    showToast("⚠️ Error al guardar. Comprueba la conexión.");
-    setSyncStatus("error");
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = "💾 Guardar";
-  }
+// PICKER
+function openListPicker(){
+  if(!currentUser){showToast("Inicia sesión para usar listas");return;}
+  document.getElementById("listPickerContent").innerHTML=misListas.length?misListas.map(l=>{
+    const ya=(l.recetas||[]).includes(currentRecetaId);
+    return `<div class="list-picker-item" onclick="toggleRecetaEnLista('${l.id}','${currentRecetaId}',${ya})"><div><div class="list-picker-name">${esc(l.nombre)}</div><div class="list-picker-meta">${(l.recetas||[]).length} recetas · ${l.esPublica?"🌍 Pública":"🔒 Privada"}</div></div>${ya?'<span class="check-icon">✓</span>':''}</div>`;
+  }).join(""):`<p style="color:var(--gris);font-size:0.85rem;padding:12px 0">Aún no tienes listas.</p>`;
+  openOverlay("listPickerOverlay");
+}
+function closeListPickerModal(e){if(e.target===document.getElementById("listPickerOverlay"))closeListPickerBtn();}
+function closeListPickerBtn(){closeOverlay("listPickerOverlay");}
+async function toggleRecetaEnLista(listaId,recetaId,yaEsta){
+  const l=misListas.find(x=>x.id===listaId),actuales=l.recetas||[];
+  const nuevas=yaEsta?actuales.filter(r=>r!==recetaId):[...actuales,recetaId];
+  await db.collection("listas").doc(listaId).update({recetas:nuevas});
+  showToast(yaEsta?"Receta eliminada de la lista":"✅ Receta añadida a la lista");
+  openListPicker();
 }
 
-// ─── TOAST ───
+// DETALLE LISTA
+function openListaDetail(id){
+  currentListaId=id;
+  const l=[...misListas,...listasPublicas].find(x=>x.id===id);if(!l)return;
+  const isMine=currentUser&&l.propietarioId===currentUser.uid;
+  document.getElementById("listaDetailTitle").textContent=l.nombre;
+  document.getElementById("listaDetailMeta").textContent=(l.esPublica?"🌍 Pública":"🔒 Privada")+" · "+l.propietarioNombre;
+  document.getElementById("btnEditLista").style.display=isMine?"flex":"none";
+  document.getElementById("btnDeleteLista").style.display=isMine?"flex":"none";
+  const rl=(l.recetas||[]).map(id=>recetas.find(r=>r.id===id)).filter(Boolean);
+  document.getElementById("listaDetailRecetas").innerHTML=rl.length?rl.map(r=>
+    `<div class="recipe-list-item">
+      <div class="recipe-list-emoji" onclick="openView('${r.id}')">${r.emoji||"🍽️"}</div>
+      <div class="recipe-list-info" onclick="openView('${r.id}')"><div class="recipe-list-title">${esc(r.titulo)}</div><div class="recipe-list-cat">${CE[r.cat]||""} ${r.cat}</div></div>
+      ${isMine?`<button class="btn-remove-from-list" onclick="removeRecetaDeLista('${id}','${r.id}')">✕</button>`:""}
+    </div>`).join(""):`<div style="text-align:center;padding:32px 16px;color:var(--gris)">Esta lista está vacía.<br>Añade recetas desde su ficha.</div>`;
+  openOverlay("listaDetailOverlay");
+}
+function closeListaDetailModal(e){if(e.target===document.getElementById("listaDetailOverlay"))closeListaDetailBtn();}
+function closeListaDetailBtn(){closeOverlay("listaDetailOverlay");}
+function editCurrentLista(){closeListaDetailBtn();openListaEditor(currentListaId);}
+function deleteCurrentLista(){closeListaDetailBtn();confirmDeleteLista(currentListaId);}
+async function removeRecetaDeLista(listaId,recetaId){
+  const l=[...misListas,...listasPublicas].find(x=>x.id===listaId);
+  await db.collection("listas").doc(listaId).update({recetas:(l.recetas||[]).filter(r=>r!==recetaId)});
+  openListaDetail(listaId);showToast("Receta eliminada de la lista");
+}
+
+// LISTA DE LA COMPRA
+function openListaCompra(){
+  const l=[...misListas,...listasPublicas].find(x=>x.id===currentListaId);if(!l)return;
+  const rl=(l.recetas||[]).map(id=>recetas.find(r=>r.id===id)).filter(Boolean);
+  document.getElementById("compraMeta").textContent=rl.length+" recetas";
+  let html="";
+  rl.forEach(r=>{
+    const ings=(r.ingredientes||[]).filter(i=>i.item);
+    if(!ings.length)return;
+    html+=`<div class="compra-section-title">${r.emoji||"🍽️"} ${esc(r.titulo)}</div>`;
+    ings.forEach((ing,idx)=>{
+      const key=`compra_${currentListaId}_${r.id}_${idx}`;
+      const done=sessionStorage.getItem(key)==="1";
+      html+=`<div class="compra-item" onclick="toggleCompraItem(this,'${key}')"><div class="compra-check${done?" checked":""}"></div><div class="compra-item-text${done?" done":""}">${ing.qty?`<span class="compra-qty">${esc(ing.qty)}</span> `:""}${esc(ing.item)}</div></div>`;
+    });
+  });
+  document.getElementById("compraItems").innerHTML=html;
+  openOverlay("compraOverlay");
+}
+function toggleCompraItem(row,key){const ch=row.querySelector(".compra-check"),tx=row.querySelector(".compra-item-text");const done=ch.classList.toggle("checked");tx.classList.toggle("done",done);sessionStorage.setItem(key,done?"1":"0");}
+function closeCompraModal(e){if(e.target===document.getElementById("compraOverlay"))closeCompraBtn();}
+function closeCompraBtn(){closeOverlay("compraOverlay");}
+function copyCompra(){
+  const l=[...misListas,...listasPublicas].find(x=>x.id===currentListaId);
+  const rl=(l.recetas||[]).map(id=>recetas.find(r=>r.id===id)).filter(Boolean);
+  let txt=`🛒 Lista de la compra: ${l.nombre}\n\n`;
+  rl.forEach(r=>{txt+=`${r.emoji||"🍽️"} ${r.titulo}\n`;(r.ingredientes||[]).filter(i=>i.item).forEach(i=>{txt+=`  • ${i.qty?i.qty+" ":""}${i.item}\n`;});txt+="\n";});
+  navigator.clipboard.writeText(txt).then(()=>showToast("📋 Lista copiada")).catch(()=>showToast("⚠️ No se pudo copiar"));
+}
+
+// HELPERS
+function openOverlay(id){document.getElementById(id).classList.add("open");document.body.style.overflow="hidden";}
+function closeOverlay(id){document.getElementById(id).classList.remove("open");document.body.style.overflow="";}
+function showConfirm(title,msg,cb){document.getElementById("confirmTitle").textContent=title;document.getElementById("confirmMsg").textContent=msg;confirmCb=cb;document.getElementById("confirmOverlay").classList.add("open");}
+function closeConfirm(){document.getElementById("confirmOverlay").classList.remove("open");confirmCb=null;}
+function runConfirm(){if(confirmCb)confirmCb();closeConfirm();}
 let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
-}
+function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),2800);}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
-function escHtml(str) {
-  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+const RECETAS_INIT=[
+  {titulo:"Puré de Verduras",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1",item:"calabaza"},{qty:"1",item:"espinacas"},{qty:"1",item:"tomate"},{qty:"...",item:"otras verduras al gusto"},{qty:"",item:"sal"}],pasos:["Limpiar y trocear la verdura.","Rehogar la verdura en la olla exprés con un poco de sal.","Añadir agua sin llegar a cubrir.","Cerrar la olla, ponerla en el 2 de la válvula y el fuego al 9 de 9.","Cuando suba la válvula, apagar y retirar del fuego.","Cuando se vaya la presión, abrir y pasar por el chino."]},
+  {titulo:"Habas",cat:"Verduras y Guarniciones",emoji:"🌿",img:"",ingredientes:[{qty:"1-2",item:"bolsa o bote de habas babi"},{qty:"1",item:"patata"},{qty:"1",item:"jamón serrano troceado"},{qty:"1",item:"diente de ajo"},{qty:"",item:"sal y aceite"}],pasos:["Si se usan habas congeladas, meterlas con agua, sal y aceite en olla exprés, válvula 2, fuego 9, 10 min tras subir la válvula.","Rehogar habas con patatas fritas en trozos, ajo machacado y jamón."]},
+  {titulo:"Albóndigas",cat:"Carnes",emoji:"🥩",img:"",ingredientes:[{qty:"1 kg",item:"carne picada"},{qty:"1",item:"huevo"},{qty:"1",item:"trozo de miga de pan de 6-8 cm"},{qty:"1 vaso",item:"harina para formar las bolas"},{qty:"2",item:"cebollas"},{qty:"3",item:"zanahorias"},{qty:"2 cdas",item:"tomate"},{qty:"1 vaso",item:"vino blanco"},{qty:"",item:"sal, pimienta y leche"}],pasos:["Mezclar carne picada, huevo, miga de pan, sal y pimienta. La miga mojada en leche.","Poner harina en vaso para hacer las bolas.","Freír en aceite y pasar a cazuela.","En ese aceite hacer salsa española y mezclar con las albóndigas."]},
+  {titulo:"Rollo Julio",cat:"Carnes",emoji:"🍗",img:"",ingredientes:[{qty:"600 g",item:"pechuga de pollo picada"},{qty:"150 g",item:"jamón serrano picado"},{qty:"1",item:"pastilla de caldo de carne"},{qty:"½ bolsa",item:"ciruelas pasas 100g"},{qty:"1 copa",item:"coñac"}],pasos:["Precalentar horno a 200°.","Mezclar todo y extender en papel de aluminio.","Enrollar en cilindro y hornear 20 min con aire arriba y abajo.","Meter vaso de agua para que no se seque.","Cuando la varilla salga limpia, sacar. Comer caliente o frío con salsa rosa."]},
+  {titulo:"Tarta de Manzana",cat:"Postres",emoji:"🍎",img:"",ingredientes:[{qty:"5",item:"manzanas reineta Chantecker"},{qty:"110 g",item:"mantequilla"},{qty:"220 g",item:"azúcar"},{qty:"1",item:"hojaldre redondo"}],pasos:["Derretir mantequilla y azúcar en el molde al fuego.","Pelar manzanas y cortarlas en 4 gajos.","Ponerlas en el molde con el corazón hacia arriba.","Dejar 20 min a fuego medio.","Poner el hojaldre encima doblando los bordes.","Horno a 180° hasta que esté dorado."]},
+  {titulo:"Porrusalda",cat:"Sopas y Cremas",emoji:"🧅",img:"",ingredientes:[{qty:"5",item:"patatas en trozos grandes"},{qty:"3",item:"puerros en trozos"},{qty:"1",item:"cebolla muy picada"},{qty:"1 trozo",item:"calabaza"},{qty:"",item:"sal"}],pasos:["Sofreír la cebolla.","Echar el resto y cubrir con agua fría.","Echar sal y hervir 30 min.","Probar las patatas para saber si están hechas."]},
+  {titulo:"Patatas Panadera",cat:"Verduras y Guarniciones",emoji:"🥔",img:"",ingredientes:[{qty:"4",item:"patatas grandes"},{qty:"1",item:"cebolla"},{qty:"",item:"mantequilla, aceite y sal"}],pasos:["Cortar patatas en rodajas y cebolla en juliana.","Sofreír con poco aceite 15 min.","Poner en fuente de horno con mantequilla tapada con papel de aluminio.","Horno a 180° 30 min."]},
+  {titulo:"Tomates al Horno",cat:"Verduras y Guarniciones",emoji:"🍅",img:"",ingredientes:[{qty:"4",item:"tomates cortados por el ecuador"},{qty:"1",item:"ajo picado"},{qty:"",item:"sal, aceite y pan rallado opcional"}],pasos:["Cortar tomates y poner sal, aceite, ajo y pan rallado.","Horno a 180° 30 min."]},
+  {titulo:"Carrilleras",cat:"Carnes",emoji:"🍷",img:"",ingredientes:[{qty:"15",item:"carrilleras"},{qty:"4",item:"cebollas muy picadas"},{qty:"½",item:"puerro muy picado"},{qty:"1 l",item:"vino tinto"},{qty:"1",item:"pastilla Starlux"},{qty:"1 cda",item:"Bovril colmada"}],pasos:["Freír carrilleras a fuego fuerte para marcarlas.","Sofreír cebolla y puerro a fuego bajo 25 min sin tapar.","Añadir carrilleras, vino tinto, Starlux y Bovril.","Olla exprés, válvula 2, fuego 9. Al subir bajar al 4, total 20 min.","Sacar carrilleras y triturar salsa.","Hervir todo junto hasta que engorde."]},
+  {titulo:"Quiche de Espinacas",cat:"Otros",emoji:"🥧",img:"",ingredientes:[{qty:"2 bolsas",item:"espinacas congeladas"},{qty:"4",item:"huevos"},{qty:"2 bandejas",item:"setas pequeñas"},{qty:"2",item:"pasta brisa"},{qty:"1",item:"diente de ajo"}],pasos:["Cocer espinacas 2 min. Sofreír setas con ajo y retirarlo.","Batir huevos y mezclar todo.","Pasta brisa en moldes con papel y legumbres, horno 10 min.","Rellenar y hornear 15 min más."]},
+  {titulo:"Pescado al Horno",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1½",item:"pescado abierto"},{qty:"1",item:"cebolla"},{qty:"3",item:"patatas"},{qty:"2",item:"tomates"},{qty:"",item:"aceite y sal"}],pasos:["Cortar cebolla en juliana y patatas en rodajas. Freír todo.","Poner de base en fuente y añadir tomates en rodajas.","Pescado encima con aceite y sal.","Horno 180°, arriba, abajo y aire, 15 min."]},
+  {titulo:"Sopa de Ajo",cat:"Sopas y Cremas",emoji:"🧄",img:"",ingredientes:[{qty:"5",item:"dientes de ajo"},{qty:"150 g",item:"pan cortezas"},{qty:"1½ l",item:"caldo"},{qty:"2",item:"pastillas de caldo de carne"},{qty:"1 cda",item:"pimentón dulce"},{qty:"1",item:"cayena"},{qty:"1",item:"huevo por persona"}],pasos:["Tostar el pan. Sofreír ajo hasta dorar.","Añadir pan y pimentón dulce. Añadir caldo y remover.","Cocer 30 min. Añadir huevo por persona antes de servir."]},
+  {titulo:"Arroz en su Tinta",cat:"Arroces",emoji:"🍚",img:"",ingredientes:[{qty:"3 vasos",item:"arroz"},{qty:"6½ vasos",item:"agua"},{qty:"2",item:"dientes de ajo"},{qty:"1",item:"pastilla de caldo"}],pasos:["Rehogar ajos. Añadir arroz 2 min.","Añadir agua caliente con pastilla. Echar sal.","Sin remover, fuego medio, 20 min exactos.","Retirar y dejar tapado 10 min."]},
+  {titulo:"Txipirones en su Tinta",cat:"Pescados y Mariscos",emoji:"🦑",img:"",ingredientes:[{qty:"1 kg",item:"begi-haundi limpio"},{qty:"½ kg",item:"cebollas rojas"},{qty:"½ kg",item:"cebollas blancas"},{qty:"2",item:"dientes de ajo"},{qty:"2 cdas",item:"tomate"},{qty:"",item:"perejil, sal y tinta"}],pasos:["Olla exprés con aceite. Capas alternas de cebolla y begihandi. Añadir tomate, ajo, perejil y sal.","Válvula 2, fuego máximo. Cuando suba bajar al 7, esperar 1 min.","Sacar begihandi y cortarlo pequeño.","Cocinar la cebolla sin tapa hasta que esté seca. Pasarla por pasapurés con la tinta.","Añadir caldo al gusto y el begihandi. Calentar antes de servir."]},
+  {titulo:"Pollo a la Cerveza",cat:"Carnes",emoji:"🍺",img:"",ingredientes:[{qty:"1",item:"pollo entero"},{qty:"1 lata",item:"cerveza"},{qty:"",item:"sal, pimienta y salsa soja"}],pasos:["Salpimentar el pollo y untar con aceite.","Media lata de cerveza. Horno 45 min a 180°.","Dar la vuelta, resto de cerveza. Otros 45 min.","Dar la vuelta, chorro de soja. 15 min.","Dar la vuelta, otro chorro de soja. 15 min."]},
+  {titulo:"Ensaladilla Rusa",cat:"Otros",emoji:"🥗",img:"",ingredientes:[{qty:"1",item:"patata mediana por persona"},{qty:"1 lata",item:"bonito para 4 patatas"},{qty:"2",item:"zanahorias"},{qty:"2",item:"huevos para mayonesa"}],pasos:["Cocer patatas sin pelar y zanahorias peladas.","Trocear patatas en cubitos y zanahorias muy pequeñas.","Mezclar bonito con patatas calientes.","Hacer mayonesa líquida con dos huevos. Mezclar todo y refrigerar."]},
+  {titulo:"Lomo con Bovril",cat:"Carnes",emoji:"🐷",img:"",ingredientes:[{qty:"1 kg",item:"lomo de cerdo"},{qty:"1 lata 25cl",item:"cerveza"},{qty:"4",item:"dientes de ajo"},{qty:"",item:"Bovril, aceite, sal y pimienta"}],pasos:["Salpimentar el lomo y embadurnar con Bovril.","Poner en fuente con aceite, cerveza y ajos.","Horno 50 min a 200°, arriba y abajo, sin aire."]},
+  {titulo:"Gazpacho",cat:"Sopas y Cremas",emoji:"🍅",img:"",ingredientes:[{qty:"1,5 kg",item:"tomates"},{qty:"6 cdas",item:"aceite de oliva virgen"},{qty:"3 cdas",item:"vinagre"},{qty:"1 cdta",item:"sal gruesa rasa"},{qty:"50 g",item:"pan de barra"}],pasos:["Meter todo en la trituradora.","Si no se peló el tomate antes, colar después."]},
+  {titulo:"Lasaña de Verduras",cat:"Verduras y Guarniciones",emoji:"🫑",img:"",ingredientes:[{qty:"",item:"calabacín"},{qty:"",item:"berenjena"},{qty:"",item:"cebolla dulce"},{qty:"",item:"pimiento verde y rojo"},{qty:"",item:"placas de lasaña directa al horno"},{qty:"",item:"nata espesa"},{qty:"",item:"queso rallado"},{qty:"",item:"salsa de tomate frito"}],pasos:["Verdura en rodajas y tacos. Rehogar cebolla y pimientos con sal, añadir resto y tomate.","Montar sofrito, placas, nata y queso.","Hornear inmediatamente o las placas se quedan duras."]},
+  {titulo:"Patatas a la Riojana",cat:"Verduras y Guarniciones",emoji:"🌶️",img:"",ingredientes:[{qty:"4",item:"patatas"},{qty:"1",item:"chorizo fresco"},{qty:"1",item:"pimiento de color"},{qty:"1",item:"pimiento choricero"},{qty:"1",item:"cebolla"},{qty:"10 g",item:"pimentón de la Vera"},{qty:"",item:"aceite y sal"}],pasos:["Dorar cebolla y pimiento. Añadir chorizo sin piel.","Incorporar patatas chascadas y pimentón.","Cubrir con agua y añadir pimiento choricero.","Cocer 40 min a fuego medio. Corregir sal."]},
+  {titulo:"Vainas con Patatas",cat:"Verduras y Guarniciones",emoji:"🫛",img:"",ingredientes:[{qty:"1 kg",item:"vainas judías verdes"},{qty:"2",item:"patatas grandes"},{qty:"",item:"agua y sal"}],pasos:["Vainas y patatas en olla exprés. Agua hasta cubrir, sal.","Válvula 2, fuego 9 hasta que suba. Bajar al 5, 2 min más.","Apagar. Abrir cuando se enfríe sacando antes la presión."]},
+  {titulo:"Salsa Española",cat:"Salsas y Bases",emoji:"🫙",img:"",ingredientes:[{qty:"2",item:"cebollas grandes"},{qty:"1",item:"puerro"},{qty:"1",item:"zanahoria"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"diente de ajo"},{qty:"1 copa",item:"coñac"},{qty:"1 chorro",item:"salsa de tomate"},{qty:"",item:"caldo de carne si hace falta"}],pasos:["Sofreír cebollas con sal hasta muy doradas.","Añadir puerro, zanahoria y pimiento.","Añadir coñac y tomate.","Añadir caldo si hace falta y pasar por pasapurés."]},
+  {titulo:"Arroz con Leche",cat:"Postres",emoji:"🥛",img:"",ingredientes:[{qty:"500 ml",item:"leche fría de nevera"},{qty:"50 g",item:"arroz"},{qty:"40 g",item:"azúcar"},{qty:"2 trozos",item:"piel de limón solo lo amarillo"}],pasos:["Poner en cazo la leche fría, arroz y piel de limón.","Fuego al 5/9 removiendo constantemente.","Al hervir, mantener 25 min bajando el fuego según espese.","Al final añadir azúcar y 4-5 min más."]},
+  {titulo:"Salsa de Tomate",cat:"Salsas y Bases",emoji:"🍅",img:"",ingredientes:[{qty:"2 latas 1kg",item:"tomate triturado"},{qty:"2",item:"cebollas grandes"},{qty:"1",item:"diente de ajo"},{qty:"1 cdta",item:"sal rasa"},{qty:"1 cda",item:"azúcar colmada"},{qty:"",item:"aceite de oliva"}],pasos:["Dorar cebolla a fuego lento con sal y aceite.","Añadir tomate y dejar ½ hora a fuego lento.","Añadir azúcar. Pasar por el chino."]},
+  {titulo:"Marmitako",cat:"Pescados y Mariscos",emoji:"🐟",img:"",ingredientes:[{qty:"1 kg",item:"bonito o atún"},{qty:"1",item:"cebolla"},{qty:"1",item:"pimiento verde"},{qty:"1",item:"pimiento rojo"},{qty:"4",item:"patatas grandes"},{qty:"",item:"pimiento choricero y caldo de pescado"}],pasos:["Sofreír cebolla, pimientos y ajo.","Añadir patatas en trozos y pimiento choricero.","Añadir caldo de pescado.","En el último minuto, añadir el pescado. Corregir sal."]},
+  {titulo:"Bechamel",cat:"Salsas y Bases",emoji:"🥛",img:"",ingredientes:[{qty:"2 cdas",item:"harina colmadas"},{qty:"½ l",item:"leche caliente"},{qty:"1 chorro",item:"aceite"},{qty:"",item:"sal"}],pasos:["Freír la harina con varillas.","Añadir leche caliente poco a poco sin dejar de remover.","Cocer sin hervir hasta espesor deseado. Corregir sal."]},
+  {titulo:"Lentejas",cat:"Legumbres",emoji:"🫘",img:"",ingredientes:[{qty:"1 vaso",item:"lentejas pardinas"},{qty:"½",item:"pimiento verde"},{qty:"2",item:"zanahorias"},{qty:"1",item:"cebolla entera"},{qty:"1",item:"puerro"},{qty:"1",item:"patata grande"},{qty:"5 vasos",item:"agua"},{qty:"1 cdta",item:"pimentón dulce sofrito"},{qty:"2",item:"dientes de ajo sofrito"}],pasos:["Todo menos pimentón y ajos en olla exprés, válvula 2.","Fuego 9, al subir bajar al 5, 15 min. Apagar.","Sacar verdura salvo zanahoria, batirla e incorporar.","Sofrito: dorar ajos, retirar, apagar, añadir pimentón. Añadir a lentejas."]},
+  {titulo:"Bizcocho de Yogur",cat:"Postres",emoji:"🍋",img:"",ingredientes:[{qty:"1",item:"yogur natural su vaso es la medida"},{qty:"1 sobre",item:"levadura Royal"},{qty:"1 medida",item:"aceite de girasol"},{qty:"2 medidas",item:"azúcar"},{qty:"3 medidas",item:"harina"},{qty:"3",item:"huevos"},{qty:"½",item:"zumo de limón y ralladura"},{qty:"½",item:"zumo de naranja y ralladura"},{qty:"1 pizca",item:"sal"}],pasos:["Mezclar todos los ingredientes y batir.","Horno a 180° arriba y abajo.","Molde en la parte de abajo. No abrir en 30 min. Total 45 min."]},
+  {titulo:"Salmorejo",cat:"Sopas y Cremas",emoji:"🥣",img:"",ingredientes:[{qty:"1 bote 1kg",item:"tomate entero pelado"},{qty:"3 rebanadas",item:"pan sin corteza"},{qty:"1",item:"diente de ajo mediano"},{qty:"1 cda",item:"vinagre"},{qty:"1 cdta",item:"sal"},{qty:"100 ml",item:"aceite de oliva"}],pasos:["Triturarlo todo.","Corregir de sal, vinagre y aceite al gusto."]},
+  {titulo:"Arroz con Almejas",cat:"Arroces",emoji:"🐚",img:"",ingredientes:[{qty:"1 bolsa",item:"almejas"},{qty:"3 vasos",item:"arroz"},{qty:"7 vasos",item:"caldo de pescado"},{qty:"2+2",item:"dientes de ajo"},{qty:"1 vaso",item:"vino blanco"},{qty:"1 cda",item:"harina"}],pasos:["Lavar almejas en agua con sal 2 horas.","Sofreír 2 ajos, añadir almejas y vino. Añadir harina. Retirar almejas abiertas.","Arroz blanco con caldo y otros 2 ajos.","Incorporar almejas al final."]}
+];
 
-// Inicializar categorías mientras carga
 renderCats();
 </script>
 </body>
